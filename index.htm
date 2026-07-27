@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GeoQuiz</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/src/earcut.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f2eb;--surface:#fff;--border:#d6cfc0;
+  --col-land:#c8c8c8;--col-land-stroke:#999999;
+  --col-correct:#84cc16;--col-active:#fef08a;--col-giveup:#ef4444;
+  --col-ocean:#0f2a4a;
+  --col-blocked:#4a4a4a;
+  --text:#1c1917;--muted:#78716c;--accent:#2563eb;--correct:#16a34a;--wrong:#dc2626;
+}
+
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+@media(max-width:640px){
+  body{height:100dvh}
+}
+
+/* SPLASH */
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:200;padding:40px}
+#splash h1{font-family:'DM Serif Display',serif;font-size:3.5rem;letter-spacing:-0.02em;line-height:1}
+#splash .sub{font-size:.78rem;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+#continent-select{font-family:'DM Mono',monospace;font-size:.78rem;padding:6px 12px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);outline:none;cursor:pointer;margin-bottom:20px;transition:border-color .15s}
+#continent-select:focus,#continent-select:hover{border-color:var(--accent)}
+#splash .mode-grid{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:24px}
+.mode-card{background:var(--surface);border:1.5px solid var(--border);padding:18px 16px;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .1s;width:250px;min-width:0;flex:0 0 250px;box-sizing:border-box;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.mode-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(37,99,235,.1);transform:translateY(-2px)}
+.mode-card .mode-icon{font-size:1.8rem;display:block;margin-bottom:8px}
+.mode-card .mode-title{font-size:.82rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.mode-card .mode-desc{font-size:.72rem;color:var(--muted);margin-top:4px}
+
+/* HEADER */
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:10}
+header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:-.01em}
+#mode-badge{font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;background:#e0e7ff;color:var(--accent);padding:2px 8px;border-radius:2px}
+#score-display{margin-left:auto;font-size:.78rem;color:var(--muted)}
+#score-display span{color:var(--correct);font-weight:500}
+#btn-menu{background:none;border:1px solid var(--border);font-family:'DM Mono',monospace;font-size:.72rem;cursor:pointer;padding:4px 10px;color:var(--muted);transition:border-color .15s,color .15s}
+#btn-menu:hover{border-color:var(--accent);color:var(--accent)}
+
+/* GIVEUP BANNER */
+#giveup-banner{display:none;background:#fff7ed;border-bottom:2px solid #fed7aa;padding:8px 20px;font-size:.78rem;color:#c2410c;align-items:center;gap:12px;flex-shrink:0;z-index:8}
+#giveup-banner.show{display:flex}
+#giveup-banner strong{font-weight:600}
+#btn-play-again{margin-left:auto;font-family:'DM Mono',monospace;font-size:.72rem;padding:4px 14px;border:1.5px solid var(--accent);background:none;color:var(--accent);cursor:pointer;transition:background .15s}
+#btn-play-again:hover{background:#eff6ff}
+
+/* MAIN */
+#main{flex:1;display:flex;overflow:hidden}
+#map-wrap{flex:1;position:relative;overflow:hidden;background:var(--col-ocean);cursor:grab}
+#map-wrap:active{cursor:grabbing}
+#three-canvas{position:absolute;inset:0;width:100%!important;height:100%!important}
+
+/* SIDEBAR */
+#sidebar{width:270px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+
+/* Question area at top of sidebar */
+#side-question{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+#q-counter-side{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+#side-prompt{font-family:'DM Serif Display',serif;font-size:1rem;line-height:1.3;color:var(--text);margin-bottom:2px}
+.panel-input-label{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.panel-input{width:100%;font-family:'DM Mono',monospace;font-size:.82rem;padding:6px 8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);outline:none;margin-bottom:2px;transition:border-color .15s}
+.panel-input:focus{border-color:var(--accent)}
+.panel-input.ok{border-color:var(--correct);background:#f0fdf4}
+.panel-input.bad{border-color:var(--wrong);animation:shake .3s}
+.panel-input:disabled{opacity:.65}
+#panel-feedback{font-size:.72rem;min-height:16px}
+#panel-feedback.correct{color:var(--correct)}
+#panel-feedback.wrong{color:var(--wrong)}
+
+/* Nav buttons */
+#side-nav{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.side-btn-row{display:flex;gap:6px}
+.side-btn{flex:1;font-family:'DM Mono',monospace;font-size:.7rem;padding:6px 0;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;transition:border-color .15s}
+.side-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.side-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* Progress */
+#progress-area{padding:10px 16px;border-bottom:1px solid var(--border)}
+#progress-label{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between}
+#progress-bar-bg{height:5px;background:#e8e2d5;overflow:hidden}
+#progress-bar-fill{height:100%;background:var(--col-correct);transition:width .4s ease;width:0%}
+
+/* Danger zone */
+#side-danger{padding:10px 16px;border-top:1px solid var(--border);margin-top:auto;display:flex;flex-direction:column;gap:6px}
+#btn-skip{width:100%;font-family:'DM Mono',monospace;font-size:.7rem;padding:6px 0;border:1.5px solid #fca5a5;background:none;color:var(--wrong);cursor:pointer;transition:background .15s}
+#btn-skip:hover:not(:disabled){background:#fff1f1}
+#btn-skip:disabled{opacity:.3;cursor:not-allowed}
+#btn-giveup{width:100%;font-family:'DM Mono',monospace;font-size:.7rem;padding:6px 0;border:1.5px solid #fed7aa;background:none;color:#c2410c;cursor:pointer;transition:background .15s}
+#btn-giveup:hover:not(:disabled){background:#fff7ed}
+#btn-giveup:disabled{opacity:.3;cursor:not-allowed}
+
+/* Answer list */
+#answer-list{flex:1;overflow-y:auto;padding:10px 16px;min-height:0}
+#answer-list h3{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.answer-item{font-size:.72rem;padding:6px;border-bottom:1px solid #f0ebe2;display:flex;align-items:center;gap:6px;cursor:pointer;border-radius:2px;transition:background .1s}
+.answer-item:hover{background:#f5f0e8}
+.answer-item.active-item{background:#fef9e6;border-left:2px solid var(--accent);padding-left:4px}
+.answer-item .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.answer-item .dot.ok{background:var(--col-correct)}
+.answer-item .dot.no{background:var(--col-giveup)}
+.answer-item .a-name{font-weight:500;flex:1}
+.answer-item .a-cap{color:var(--muted);font-size:.65rem}
+
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+
+/* LOADING SCREEN */
+#loading{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:300}
+#loading.show{display:flex}
+#loading .load-title{font-family:'DM Serif Display',serif;font-size:2rem;letter-spacing:-.02em;color:var(--text)}
+#loading .load-sub{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#loading .load-bar-bg{width:200px;height:3px;background:#e8e2d5;overflow:hidden}
+#loading .load-bar-fill{height:100%;background:var(--accent);animation:loadpulse 1.4s ease-in-out infinite}
+@keyframes loadpulse{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
+
+/* MAP CONTROLS */
+#map-controls{position:absolute;bottom:16px;right:16px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.map-btn{width:30px;height:30px;background:rgba(255,255,255,.88);border:1px solid rgba(255,255,255,.4);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;color:#1c1917}
+.map-btn:hover{background:white}
+
+/* Legend */
+#map-legend{position:absolute;bottom:16px;left:16px;display:flex;flex-direction:column;gap:4px;z-index:5;background:rgba(255,255,255,.85);padding:8px 10px;border:1px solid rgba(255,255,255,.4);font-size:.62rem;font-family:'DM Mono',monospace;color:#1c1917;letter-spacing:.05em}
+.legend-row{display:flex;align-items:center;gap:6px}
+.legend-swatch{width:10px;height:10px;flex-shrink:0}
+
+/* ── MOBILE ── */
+@media(max-width:640px){
+  /* Splash */
+  #splash h1{font-size:2.4rem}
+  #splash .mode-grid{flex-direction:column;align-items:center}
+  .mode-card{width:100%;max-width:320px;flex:none}
+
+  /* Header — compact */
+  header{padding:8px 12px;gap:8px}
+  header h1{font-size:1rem}
+  #mode-badge{display:none}
+  #score-display{font-size:.7rem}
+  #btn-menu{font-size:.66rem;padding:3px 8px}
+
+  /* Main — vertical stack */
+  #main{flex-direction:column}
+
+  /* Globe — top half */
+  #map-wrap{flex:0 0 45vh;min-height:0}
+
+  /* Map controls — smaller, tucked */
+  #map-controls{bottom:8px;right:8px;gap:3px}
+  .map-btn{width:26px;height:26px;font-size:.85rem}
+  #map-legend{bottom:8px;left:8px;padding:5px 7px;font-size:.56rem}
+
+  /* Sidebar — bottom half, scrollable */
+  #sidebar{width:100%;flex:1;border-left:none;border-top:1px solid var(--border);flex-direction:column;min-height:0;overflow-y:auto}
+
+  /* Collapse answer list on mobile to save space */
+  #answer-list{flex:0 0 auto;max-height:120px;overflow-y:auto}
+
+  /* Side danger buttons — row on mobile */
+  #side-danger{flex-direction:row;gap:8px;padding:8px 12px}
+  #btn-skip,#btn-giveup{flex:1}
+
+  /* Inputs bigger for touch */
+  .panel-input{font-size:.9rem;padding:8px 10px}
+  #side-question{padding:10px 12px}
+  #side-nav{padding:8px 12px}
+  #progress-area{padding:8px 12px}
+
+  /* Giveup banner */
+  #giveup-banner{flex-wrap:wrap;gap:6px;padding:8px 12px;font-size:.72rem}
+  #btn-play-again{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <h1>GeoQuiz</h1>
+  <p class="sub">World Geography · 197 Countries</p>
+  <select id="continent-select">
+    <option value="World">🌍 World (All)</option>
+  </select>
+  <div class="mode-grid">
+    <div class="mode-card" onclick="startGame('countries')"><span class="mode-icon">🗺️</span><div class="mode-title">Countries</div><div class="mode-desc">See outline, name the country</div></div>
+    <div class="mode-card" onclick="startGame('capitals')"><span class="mode-icon">🏛️</span><div class="mode-title">Capitals</div><div class="mode-desc">See country name, name the capital</div></div>
+    <div class="mode-card" onclick="startGame('both')"><span class="mode-icon">🌍</span><div class="mode-title">Countries &amp; Capitals</div><div class="mode-desc">Name both from the outline</div></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="load-title">GeoQuiz</div>
+  <div class="load-sub" id="loading-label">Building globe…</div>
+  <div class="load-bar-bg"><div class="load-bar-fill"></div></div>
+</div>
+
+<header>
+  <h1>GeoQuiz</h1>
+  <span id="mode-badge">—</span>
+  <span id="score-display">correct: <span id="score-num">0</span> / <span id="score-total">0</span></span>
+  <button id="btn-menu" onclick="showSplash()">← menu</button>
+</header>
+
+<div id="giveup-banner">
+  <strong>Game over.</strong> All countries revealed — click any to review.
+  <button id="btn-play-again" onclick="showSplash()">Play again</button>
+</div>
+
+<div id="main">
+  <div id="map-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div id="map-controls">
+      <button class="map-btn" id="zoom-in">+</button>
+      <button class="map-btn" id="zoom-out">−</button>
+      <button class="map-btn" id="zoom-reset">⌂</button>
+    </div>
+    <div id="map-legend">
+      <div class="legend-row"><div class="legend-swatch" style="background:#c8c8c8"></div>country</div>
+      <div class="legend-row" id="legend-blocked" style="display:none"><div class="legend-swatch" style="background:#4a4a4a"></div>other continents</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#84cc16"></div>correct</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#ef4444"></div>revealed</div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="side-question">
+      <div id="q-counter-side">—</div>
+      <div id="side-prompt"></div>
+      <div id="panel-country-row">
+        <div class="panel-input-label">Country</div>
+        <input class="panel-input" id="panel-input-country" type="text" placeholder="type country..." autocomplete="off" spellcheck="false">
+      </div>
+      <div id="panel-capital-row">
+        <div class="panel-input-label">Capital</div>
+        <input class="panel-input" id="panel-input-capital" type="text" placeholder="type capital..." autocomplete="off" spellcheck="false">
+      </div>
+      <div id="panel-feedback"></div>
+    </div>
+
+    <div id="side-nav">
+      <div class="side-btn-row">
+        <button class="side-btn" id="btn-prev-side" disabled>← prev</button>
+        <button class="side-btn" id="btn-next-side">next →</button>
+      </div>
+    </div>
+
+    <div id="progress-area">
+      <div id="progress-label"><span>Progress</span><span id="progress-text">0 / 0</span></div>
+      <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+    </div>
+
+    <div id="answer-list"><h3>Answered</h3></div>
+
+    <div id="side-danger">
+      <button id="btn-skip" disabled>reveal answer</button>
+      <button id="btn-giveup">give up (reveal all)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  COLOURS
+// ─────────────────────────────────────────────
+const C = {
+  land:    0xc8c8c8,
+  stroke:  0x999999,
+  correct: 0x84cc16,
+  active:  0xfef08a,
+  giveup:  0xef4444,
+  ocean:   0x0f2a4a,
+  oceanRim:0x1a3a6e,
+  atmo:    0x1e4080,
+  capital: 0x1d4ed8,
+  blocked: 0x4a4a4a,   // dark grey for disputed/Antarctica
+};
+
+const GLOBE_R = 1.0;
+
+// ─────────────────────────────────────────────
+//  ROBUST FEATURE KEY
+//  QGIS processing can reset ISO_A3 to "" or "-99".
+//  Fall back to ADMIN name so the feature still works.
+// ─────────────────────────────────────────────
+function featKey(props){
+  const iso = props.ISO_A3;
+  if(iso && iso !== "-99" && iso !== "-9" && iso.trim() !== "") return iso;
+  return "ADMIN:" + (props.ADMIN || props.NAME || "unknown");
+}
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let geoData = null, blockedData = null, mode = null;
+let questions=[], unanswered=[], uIdx=0;
+let answered = new Set(), revealed = new Set();
+let score = 0, gameOver = false;
+let activeFeatIdx = null;
+
+// ─────────────────────────────────────────────
+//  THREE.JS GLOBALS
+// ─────────────────────────────────────────────
+let renderer, scene, camera, globe, countryMeshes = [], capitalDots = [];
+let isDragging = false, prevMouse = {x:0,y:0};
+let rotQ = new THREE.Quaternion();
+let targetQ = new THREE.Quaternion();
+let isAnimatingRotation = false;
+let rotateSpeed = 0.1;
+let zoomDist = 3.0;
+let targetZoom = 3.0;
+const MIN_ZOOM = 1.4, MAX_ZOOM = 8;
+let animFrameId = null;
+
+const featureMeshes = {}; // fi -> THREE.Mesh[]
+const featureCapDot = {}; // fi -> THREE.Mesh  (keyed by fi, not ISO)
+// blocked layer meshes (not interactive, not colored by game state)
+let blockedMeshes = [];
+
+// ─────────────────────────────────────────────
+//  UTILITY
+// ─────────────────────────────────────────────
+function norm(s){
+  if(!s) return "";
+  return s.toLowerCase()
+    .replace(/['''\u2018\u2019\-\u2013\u2014]/g,"")
+    .replace(/[éèêë]/g,"e").replace(/[àâä]/g,"a").replace(/[ùûü]/g,"u")
+    .replace(/[îï]/g,"i").replace(/[ôö]/g,"o").replace(/[ñ]/g,"n")
+    .replace(/[ç]/g,"c").replace(/[ß]/g,"ss").replace(/\s+/g,"");
+}
+
+function latlonToVec3(lon,lat,r){
+  const phi = (90-lat)*Math.PI/180;
+  const theta = (lon+180)*Math.PI/180;
+  return new THREE.Vector3(
+    -r*Math.sin(phi)*Math.cos(theta),
+     r*Math.cos(phi),
+     r*Math.sin(phi)*Math.sin(theta)
+  );
+}
+
+// ─────────────────────────────────────────────
+//  DATA LOADING
+// ─────────────────────────────────────────────
+async function tryFetch(url){
+  try{const r=await fetch(url);if(!r.ok)return null;return await r.json();}
+  catch{return null;}
+}
+
+let pendingMode = null; // mode chosen before data finished loading
+let dataReady = false;
+let selectedContinent = "World";
+
+async function loadData(){
+  // Both fetches in parallel — silent, no UI updates
+  const [countries, blocked] = await Promise.all([
+    tryFetch("countries_197_with_capitals.geojson"),
+    tryFetch("blocked.geojson")
+  ]);
+
+  geoData     = countries || await pickFile("Select countries GeoJSON");
+  blockedData = blocked   || await pickFile("Select blocked.geojson");
+
+  dataReady = true;
+
+  // Populate continent dropdown from actual data
+  const continents = [...new Set(
+    geoData.features.map(f=>f.properties.CONTINENT).filter(Boolean)
+  )].sort();
+  const sel = document.getElementById("continent-select");
+  continents.forEach(c=>{
+    const opt = document.createElement("option");
+    opt.value = c; opt.textContent = c;
+    sel.appendChild(opt);
+  });
+
+  // If the user already picked a mode, start now
+  if(pendingMode !== null){
+    const m = pendingMode;
+    pendingMode = null;
+    startGame(m);
+  }
+}
+
+function pickFile(label="Select GeoJSON file"){
+  return new Promise(res=>{
+    const i=document.createElement("input");
+    i.type="file";i.accept=".geojson,.json";
+    i.onchange=e=>{const r=new FileReader();r.onload=ev=>res(JSON.parse(ev.target.result));r.readAsText(e.target.files[0]);};
+    i.click();
+  });
+}
+
+// ─────────────────────────────────────────────
+//  GEOMETRY HELPERS
+// ─────────────────────────────────────────────
+function getFeaturePolygons(feature){
+  const type=feature.geometry.type;
+  const coords=feature.geometry.coordinates;
+  if(type==="Polygon") return [coords];
+  if(type==="MultiPolygon") return coords;
+  return [];
+}
+
+function fixRing(ring){
+  const out=[...ring];
+  for(let i=1;i<out.length;i++){
+    let dlon=out[i][0]-out[i-1][0];
+    if(dlon>180) out[i]=[out[i][0]-360,out[i][1]];
+    else if(dlon<-180) out[i]=[out[i][0]+360,out[i][1]];
+  }
+  return out;
+}
+
+function signedArea2D(flat){
+  let area=0;
+  const n=flat.length;
+  for(let i=0,j=n-2;i<n;j=i,i+=2){
+    area+=(flat[j]-flat[i])*(flat[j+1]+flat[i+1]);
+  }
+  return area;
+}
+
+function reverseFlat(flat){
+  const out=[];
+  for(let i=flat.length-2;i>=0;i-=2) out.push(flat[i],flat[i+1]);
+  return out;
+}
+
+function sphericallySubdivide(lonlats, triIndices, R, maxDeg){
+  const pts=[...lonlats];
+  let tris=new Int32Array(triIndices);
+  const edgeCache={};
+
+  function midpoint(a,b){
+    const key=a<b?`${a}_${b}`:`${b}_${a}`;
+    if(edgeCache[key]!==undefined) return edgeCache[key];
+    const va=latlonToVec3(pts[a][0],pts[a][1],1);
+    const vb=latlonToVec3(pts[b][0],pts[b][1],1);
+    const vm=new THREE.Vector3().addVectors(va,vb).normalize();
+    const lat=Math.asin(Math.max(-1,Math.min(1,vm.y)))*180/Math.PI;
+    const lon2=Math.atan2(vm.z,-vm.x)*180/Math.PI-180;
+    pts.push([lon2,lat]);
+    const idx=pts.length-1;
+    edgeCache[key]=idx;
+    return idx;
+  }
+
+  function edgeLenDeg(a,b){
+    const dx=pts[a][0]-pts[b][0], dy=pts[a][1]-pts[b][1];
+    return Math.sqrt(dx*dx+dy*dy);
+  }
+
+  for(let pass=0;pass<4;pass++){
+    let subdivided=false;
+    const newTris=[];
+    for(let i=0;i<tris.length;i+=3){
+      const i0=tris[i],i1=tris[i+1],i2=tris[i+2];
+      const l01=edgeLenDeg(i0,i1);
+      const l12=edgeLenDeg(i1,i2);
+      const l20=edgeLenDeg(i2,i0);
+      if(l01>maxDeg||l12>maxDeg||l20>maxDeg){
+        subdivided=true;
+        const m01=midpoint(i0,i1);
+        const m12=midpoint(i1,i2);
+        const m20=midpoint(i2,i0);
+        newTris.push(i0,m01,m20, m01,i1,m12, m20,m12,i2, m01,m12,m20);
+      } else {
+        newTris.push(i0,i1,i2);
+      }
+    }
+    // Use typed array to avoid Chrome stack overflow from spread on large arrays
+    tris = new Int32Array(newTris);
+    if(!subdivided) break;
+  }
+
+  const positions=new Float32Array(pts.length*3);
+  for(let i=0;i<pts.length;i++){
+    const v=latlonToVec3(pts[i][0],pts[i][1],R);
+    positions[i*3]=v.x; positions[i*3+1]=v.y; positions[i*3+2]=v.z;
+  }
+  return {positions, indices:Array.from(tris)};
+}
+
+function polygonToGeometry(polygon, radius){
+  radius = radius || (GLOBE_R+0.003);
+  if(!polygon||!polygon[0]||polygon[0].length<4) return null;
+
+  const outerRaw=polygon[0];
+  const n=outerRaw.length-1;
+  if(n<3) return null;
+  let clon=0,clat=0;
+  for(let i=0;i<n;i++){clon+=outerRaw[i][0];clat+=outerRaw[i][1];}
+  clon/=n; clat/=n;
+
+  const proj=d3.geoAzimuthalEquidistant().scale(1).translate([0,0]).rotate([-clon,-clat]);
+
+  function ringToFlat(ring){
+    const fixed=fixRing(ring);
+    const pts=[];
+    const last=fixed.length-1;
+    const EPS=1e-9;
+    for(let i=0;i<last;i++){
+      const p=proj([fixed[i][0],fixed[i][1]]);
+      // Skip unprojectable points (antipode singularity from QGIS repair) instead of aborting
+      if(!p||isNaN(p[0])||isNaN(p[1])||!isFinite(p[0])||!isFinite(p[1])) continue;
+      // Deduplicate consecutive identical vertices (QGIS repair artifact)
+      if(pts.length>=2){
+        const px=pts[pts.length-2],py=pts[pts.length-1];
+        if(Math.abs(p[0]-px)<EPS&&Math.abs(p[1]-py)<EPS) continue;
+      }
+      pts.push(p[0],p[1]);
+    }
+    // Also deduplicate last vs first
+    if(pts.length>=4){
+      const fx=pts[0],fy=pts[1],lx=pts[pts.length-2],ly=pts[pts.length-1];
+      if(Math.abs(lx-fx)<EPS&&Math.abs(ly-fy)<EPS){pts.pop();pts.pop();}
+    }
+    return pts;
+  }
+
+  let outerFlat=ringToFlat(outerRaw);
+  if(!outerFlat||outerFlat.length<6) return null;
+
+  if(signedArea2D(outerFlat)>0) outerFlat=reverseFlat(outerFlat);
+
+  let flat=[...outerFlat];
+  const holeIndices=[];
+
+  for(let h=1;h<polygon.length;h++){
+    let hf=ringToFlat(polygon[h]);
+    if(!hf||hf.length<6) continue;
+    if(signedArea2D(hf)<0) hf=reverseFlat(hf);
+    holeIndices.push(flat.length/2);
+    flat=flat.concat(hf);
+  }
+
+  let triIndices;
+  try{ triIndices=earcut(flat, holeIndices.length?holeIndices:null, 2); }
+  catch(e){ return null; }
+  if(!triIndices||triIndices.length===0) return null;
+
+  const lonlats=[];
+  const numVerts=flat.length/2;
+  for(let i=0;i<numVerts;i++){
+    const ll=proj.invert([flat[i*2],flat[i*2+1]]);
+    lonlats.push(ll||[clon,clat]);
+  }
+
+  const {positions,indices}=sphericallySubdivide(lonlats,triIndices,radius,2);
+
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  geo.setIndex(indices);
+  return geo;
+}
+
+function polygonToLines(polygon){
+  const segs=[];
+  for(const rawRing of polygon){
+    const ring=fixRing(rawRing);
+    const n=ring.length;
+    for(let i=0;i<n-1;i++){
+      const a=latlonToVec3(ring[i][0],ring[i][1],GLOBE_R+0.006);
+      const b=latlonToVec3(ring[i+1][0],ring[i+1][1],GLOBE_R+0.006);
+      if(Math.abs(ring[i][0]-ring[i+1][0])>90) continue;
+      segs.push(a,b);
+    }
+  }
+  if(segs.length===0) return null;
+  return new THREE.BufferGeometry().setFromPoints(segs);
+}
+
+// ─────────────────────────────────────────────
+//  THREE.JS SETUP
+// ─────────────────────────────────────────────
+function initThree(){
+  const wrap=document.getElementById("map-wrap");
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+
+  renderer=new THREE.WebGLRenderer({canvas:document.getElementById("three-canvas"),antialias:true,alpha:false,logarithmicDepthBuffer:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(W,H);
+  renderer.setClearColor(C.ocean);
+
+  scene=new THREE.Scene();
+
+  camera=new THREE.PerspectiveCamera(40,W/H,0.01,100);
+  camera.position.set(0,0,zoomDist);
+
+  // Atmosphere
+  const atmoGeo=new THREE.SphereGeometry(GLOBE_R*1.02,64,64);
+  const atmoMat=new THREE.MeshBasicMaterial({color:C.atmo,transparent:true,opacity:.18,side:THREE.BackSide});
+  scene.add(new THREE.Mesh(atmoGeo,atmoMat));
+
+  // Ocean sphere
+  const oceanGeo=new THREE.SphereGeometry(GLOBE_R,64,64);
+  const oceanMat=new THREE.MeshBasicMaterial({color:C.oceanRim});
+  scene.add(new THREE.Mesh(oceanGeo,oceanMat));
+
+  buildGraticule();
+
+  globe=new THREE.Group();
+  scene.add(globe);
+
+  // Build blocked layer FIRST (rendered underneath countries)
+  buildBlockedMeshes();
+
+  buildCountryMeshes();
+  buildCapitalDots();
+
+  scene.add(new THREE.AmbientLight(0xffffff,1.0));
+
+  window.addEventListener("resize",onResize);
+  setupInteraction();
+  startRenderLoop();
+}
+
+function buildGraticule(){
+  const mat=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.07});
+  const group=new THREE.Group();
+  const r=GLOBE_R+0.001;
+  for(let lon=-180;lon<180;lon+=30){
+    const pts=[];
+    for(let lat=-90;lat<=90;lat+=2) pts.push(latlonToVec3(lon,lat,r));
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),mat));
+  }
+  for(let lat=-60;lat<=60;lat+=30){
+    const pts=[];
+    for(let lon=-180;lon<=180;lon+=2) pts.push(latlonToVec3(lon,lat,r));
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),mat));
+  }
+  scene.add(group);
+}
+
+// ─────────────────────────────────────────────
+//  BLOCKED LAYER (disputed / Antarctica)
+// ─────────────────────────────────────────────
+function buildBlockedMeshes(){
+  // Remove old
+  for(const m of blockedMeshes) globe.remove(m);
+  blockedMeshes=[];
+
+  if(!blockedData||!blockedData.features) return;
+
+  // Render slightly below country layer (radius offset 0.001 vs country 0.003)
+  const fillRadius = GLOBE_R + 0.001;
+  const lineRadius  = GLOBE_R + 0.004;
+
+  blockedData.features.forEach(feature=>{
+    if(!feature.geometry) return;
+    const polys=getFeaturePolygons(feature);
+    for(const poly of polys){
+      const geo=polygonToGeometry(poly, fillRadius);
+      if(geo){
+        const mat=new THREE.MeshBasicMaterial({
+          color: C.blocked,
+          side: THREE.DoubleSide,
+          polygonOffset: true,
+          polygonOffsetFactor: 1,
+          polygonOffsetUnits: 1
+        });
+        const mesh=new THREE.Mesh(geo,mat);
+        globe.add(mesh);
+        blockedMeshes.push(mesh);
+      }
+      // Subtle outline
+      const outGeo=polygonToLines(poly);
+      if(outGeo){
+        const outMat=new THREE.LineBasicMaterial({color:0x666666,linewidth:1});
+        const lines=new THREE.LineSegments(outGeo,outMat);
+        globe.add(lines);
+        blockedMeshes.push(lines);
+      }
+    }
+  });
+}
+
+function buildCountryMeshes(){
+  if(!geoData) return;
+  for(const fi in featureMeshes){
+    for(const m of featureMeshes[fi]) globe.remove(m);
+  }
+  Object.keys(featureMeshes).forEach(k=>delete featureMeshes[k]);
+  countryMeshes=[];
+
+  geoData.features.forEach((feature,fi)=>{
+    const iso=featKey(feature.properties);
+    if(feature.geometry==null) return;
+    const polys=getFeaturePolygons(feature);
+    const meshArr=[];
+
+    for(const poly of polys){
+      const geo=polygonToGeometry(poly);
+      if(geo){
+        const mat=new THREE.MeshBasicMaterial({
+          color:getColor(fi),
+          side:THREE.DoubleSide,
+          polygonOffset:true,
+          polygonOffsetFactor:-1,
+          polygonOffsetUnits:-1
+        });
+        const mesh=new THREE.Mesh(geo,mat);
+        mesh.userData={fi,iso};
+        globe.add(mesh);
+        meshArr.push(mesh);
+        countryMeshes.push(mesh);
+      }
+      const outGeo=polygonToLines(poly);
+      if(outGeo){
+        const outMat=new THREE.LineBasicMaterial({color:0x888888,linewidth:1});
+        const lines=new THREE.LineSegments(outGeo,outMat);
+        globe.add(lines);
+        meshArr.push(lines);
+      }
+    }
+    if(meshArr.filter(m=>m.isMesh).length===0){
+      console.warn(`[GeoQuiz] No mesh built for fi=${fi} iso=${iso} name=${feature.properties.ADMIN} — geometry may be degenerate`);
+    }
+    featureMeshes[fi]=meshArr; // keyed by fi, not ISO
+  });
+}
+
+function buildCapitalDots(){
+  for(const iso in featureCapDot) globe.remove(featureCapDot[iso]);
+  Object.keys(featureCapDot).forEach(k=>delete featureCapDot[k]);
+
+  const dotGeo=new THREE.SphereGeometry(0.012,8,8);
+  geoData.features.forEach((f,fi)=>{
+    const p=f.properties;
+    if(p.capital_lon==null||p.capital_lat==null) return;
+    const mat=new THREE.MeshBasicMaterial({color:C.capital});
+    const dot=new THREE.Mesh(dotGeo,mat.clone());
+    const v=latlonToVec3(p.capital_lon,p.capital_lat,GLOBE_R+0.008);
+    dot.position.copy(v);
+    dot.visible=answered.has(fi)||revealed.has(fi);
+    globe.add(dot);
+    featureCapDot[fi]=dot; // keyed by fi
+  });
+}
+
+function inContinent(fi){
+  if(selectedContinent==="World") return true;
+  return geoData.features[fi]?.properties?.CONTINENT === selectedContinent;
+}
+
+function getColor(fi){
+  if(!inContinent(fi)) return C.blocked;
+  if(answered.has(fi)) return C.correct;
+  if(revealed.has(fi)) return C.giveup;
+  if(fi===activeFeatIdx) return C.active;
+  return C.land;
+}
+
+function refreshCountryColors(){
+  geoData.features.forEach((f,fi)=>{
+    if(!featureMeshes[fi]) return;
+    const col=getColor(fi);
+    for(const m of featureMeshes[fi]){
+      if(m.isMesh) m.material.color.set(col);
+    }
+    if(featureCapDot[fi]) featureCapDot[fi].visible=answered.has(fi)||revealed.has(fi);
+  });
+}
+
+function setFeatureColor(fi,col){
+  if(!featureMeshes[fi]) return;
+  for(const m of featureMeshes[fi]){
+    if(m.isMesh) m.material.color.set(col);
+  }
+}
+
+// ─────────────────────────────────────────────
+//  RENDER LOOP
+// ─────────────────────────────────────────────
+function startRenderLoop(){
+  if(animFrameId) cancelAnimationFrame(animFrameId);
+  function loop(){
+    animFrameId=requestAnimationFrame(loop);
+    if(Math.abs(camera.position.z-targetZoom)>0.001){
+      camera.position.z+=(targetZoom-camera.position.z)*0.12;
+    }
+    if(isAnimatingRotation){
+      globe.quaternion.slerp(targetQ,rotateSpeed);
+      if(globe.quaternion.angleTo(targetQ)<0.001){
+        globe.quaternion.copy(targetQ);
+        isAnimatingRotation=false;
+      }
+    }
+    renderer.render(scene,camera);
+  }
+  loop();
+}
+
+function onResize(){
+  const wrap=document.getElementById("map-wrap");
+  const W=wrap.clientWidth,H=wrap.clientHeight;
+  renderer.setSize(W,H);
+  camera.aspect=W/H;
+  camera.updateProjectionMatrix();
+}
+
+// ─────────────────────────────────────────────
+//  INTERACTION
+// ─────────────────────────────────────────────
+function setupInteraction(){
+  const canvas=document.getElementById("three-canvas");
+  const raycaster=new THREE.Raycaster();
+  const mouse=new THREE.Vector2();
+
+  let dragStartPos={x:0,y:0};
+  let totalDragDist=0;
+
+  canvas.addEventListener("mousedown",e=>{
+    isDragging=true;
+    dragStartPos={x:e.clientX,y:e.clientY};
+    totalDragDist=0;
+    prevMouse={x:e.clientX,y:e.clientY};
+  });
+
+  window.addEventListener("mousemove",e=>{
+    if(!isDragging) return;
+    const dx=e.clientX-prevMouse.x, dy=e.clientY-prevMouse.y;
+    totalDragDist+=Math.sqrt(dx*dx+dy*dy);
+    const speed=0.4*(zoomDist/3);
+    const axis=new THREE.Vector3(dy,dx,0).normalize();
+    const angle=Math.sqrt(dx*dx+dy*dy)*speed*Math.PI/180;
+    const dq=new THREE.Quaternion().setFromAxisAngle(axis,angle);
+    globe.quaternion.premultiply(dq);
+    prevMouse={x:e.clientX,y:e.clientY};
+  });
+
+  window.addEventListener("mouseup",e=>{
+    if(!isDragging) return;
+    isDragging=false;
+    if(totalDragDist<5){
+      const wrap=document.getElementById("map-wrap");
+      const rect=wrap.getBoundingClientRect();
+      mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+      mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+      raycaster.setFromCamera(mouse,camera);
+      const hits=raycaster.intersectObjects(countryMeshes);
+      if(hits.length>0){
+        const fi=hits[0].object.userData.fi;
+        if(fi!==undefined) onClickFeatureIdx(fi);
+      }
+    }
+  });
+
+  canvas.addEventListener("wheel",e=>{
+    e.preventDefault();
+    targetZoom*=e.deltaY>0?1.09:0.92;
+    targetZoom=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,targetZoom));
+    zoomDist=targetZoom;
+  },{passive:false});
+
+  let touchDist=0;
+  canvas.addEventListener("touchstart",e=>{
+    e.preventDefault();
+    if(e.touches.length===1){
+      isDragging=true;
+      prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+      dragStartPos={...prevMouse};totalDragDist=0;
+    } else if(e.touches.length===2){
+      isDragging=false;
+      touchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    }
+  },{passive:false});
+  canvas.addEventListener("touchmove",e=>{
+    e.preventDefault();
+    if(e.touches.length===1&&isDragging){
+      const dx=e.touches[0].clientX-prevMouse.x,dy=e.touches[0].clientY-prevMouse.y;
+      totalDragDist+=Math.hypot(dx,dy);
+      const speed=0.4*(zoomDist/3);
+      const axis=new THREE.Vector3(dy,dx,0).normalize();
+      const angle=Math.hypot(dx,dy)*speed*Math.PI/180;
+      globe.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis,angle));
+      prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+    } else if(e.touches.length===2){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      targetZoom*=touchDist/d;
+      targetZoom=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,targetZoom));
+      zoomDist=targetZoom;
+      touchDist=d;
+    }
+  },{passive:false});
+  canvas.addEventListener("touchend",e=>{isDragging=false;});
+
+  document.getElementById("zoom-in").onclick=()=>{targetZoom=Math.max(MIN_ZOOM,targetZoom*0.77);zoomDist=targetZoom;};
+  document.getElementById("zoom-out").onclick=()=>{targetZoom=Math.min(MAX_ZOOM,targetZoom*1.3);zoomDist=targetZoom;};
+  document.getElementById("zoom-reset").onclick=()=>{
+    targetZoom=3.0;zoomDist=3.0;
+    targetQ.set(0,0,0,1);isAnimatingRotation=true;
+  };
+}
+
+// ─────────────────────────────────────────────
+//  ROTATION TO FEATURE
+// ─────────────────────────────────────────────
+function rotateTo(feature, cb, fast=false){
+  const centroid=d3.geoCentroid(feature);
+  const lon=centroid[0], lat=centroid[1];
+
+  const phi = (90 - lat) * Math.PI / 180;
+  const theta = (lon + 180) * Math.PI / 180;
+  const centroidLocal = new THREE.Vector3(
+    -Math.sin(phi)*Math.cos(theta),
+     Math.cos(phi),
+     Math.sin(phi)*Math.sin(theta)
+  ).normalize();
+
+  const northLocal = new THREE.Vector3(0, 1, 0);
+  const q1 = new THREE.Quaternion().setFromUnitVectors(centroidLocal, new THREE.Vector3(0,0,1));
+  const northAfterQ1 = northLocal.clone().applyQuaternion(q1);
+  const northXY = new THREE.Vector3(northAfterQ1.x, northAfterQ1.y, 0);
+  if(northXY.lengthSq() > 0.0001){
+    northXY.normalize();
+    const q2 = new THREE.Quaternion().setFromUnitVectors(northXY, new THREE.Vector3(0,1,0));
+    targetQ = q2.multiply(q1);
+  } else {
+    targetQ = q1;
+  }
+
+  rotateSpeed = fast ? 0.18 : 0.1;
+
+  try{
+    const bb=d3.geoBounds(feature);
+    const span=Math.max(Math.abs(bb[1][0]-bb[0][0]),Math.abs(bb[1][1]-bb[0][1]));
+    targetZoom = span<2?1.7 : span<10?2.2 : span<30?2.8 : 3.2;
+    zoomDist=targetZoom;
+  }catch(e){targetZoom=2.5;zoomDist=2.5;}
+
+  isAnimatingRotation=true;
+  if(cb) setTimeout(cb, fast ? 300 : 700);
+}
+
+// ─────────────────────────────────────────────
+//  GAME LOGIC
+// ─────────────────────────────────────────────
+function startGame(m){
+  // If data isn't ready yet, show loading screen immediately and queue the mode
+  if(!dataReady){
+    pendingMode = m;
+    document.getElementById("splash").style.display="none";
+    document.getElementById("loading").classList.add("show");
+    document.getElementById("loading-label").textContent="Loading data…";
+    return;
+  }
+
+  mode=m;
+  selectedContinent = document.getElementById("continent-select")?.value || "World";
+  const continentFeatures = geoData.features
+    .map((_,i)=>i)
+    .filter(fi => selectedContinent==="World" || geoData.features[fi].properties.CONTINENT===selectedContinent);
+  questions=d3.shuffle(continentFeatures);
+  unanswered=[...questions];uIdx=0;
+  score=0;gameOver=false;answered.clear();revealed.clear();
+  activeFeatIdx=null;
+
+  // Show loading screen, hide splash — yield to browser to paint before heavy work
+  document.getElementById("splash").style.display="none";
+  document.getElementById("loading").classList.add("show");
+  document.getElementById("loading-label").textContent="Building globe…";
+
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.getElementById("giveup-banner").classList.remove("show");
+    document.getElementById("answer-list").innerHTML="<h3>Answered</h3>";
+    const continentLabel = selectedContinent==="World" ? "" : ` · ${selectedContinent}`;
+    document.getElementById("mode-badge").textContent=(m==="countries"?"Countries":m==="capitals"?"Capitals":"Countries & Capitals")+continentLabel;
+
+    // Update legend: show "out of scope" row only in continent mode
+    const legendBlocked = document.getElementById("legend-blocked");
+    if(legendBlocked) legendBlocked.style.display = selectedContinent==="World" ? "none" : "flex";
+
+    if(!renderer){
+      initThree();
+    } else {
+      for(const iso in featureMeshes){for(const m of featureMeshes[iso])globe.remove(m);}
+      Object.keys(featureMeshes).forEach(k=>delete featureMeshes[k]);
+      countryMeshes=[];
+      for(const iso in featureCapDot) globe.remove(featureCapDot[iso]);
+      Object.keys(featureCapDot).forEach(k=>delete featureCapDot[k]);
+      globe.quaternion.set(0,0,0,1);
+      targetQ.set(0,0,0,1);
+      targetZoom=3.0;zoomDist=3.0;
+      buildBlockedMeshes();
+      buildCountryMeshes();
+      buildCapitalDots();
+    }
+
+    updateScoreDisplay();updateNavButtons();updateCounterSide();
+
+    if(unanswered.length>0){
+      const fi=unanswered[0];
+      activeFeatIdx=fi;
+      setFeatureColor(fi,C.active);
+      populatePanel(fi);
+      focusPanelInput();
+      rotateTo(geoData.features[fi], null);
+      updateNavButtons();updateCounterSide();
+    }
+
+    // Hide loading screen
+    document.getElementById("loading").classList.remove("show");
+  }));
+}
+
+function showSplash(){
+  document.getElementById("splash").style.display="flex";
+  document.getElementById("giveup-banner").classList.remove("show");
+}
+
+function onClickFeatureIdx(fi){
+  // Ignore clicks on out-of-continent countries
+  if(!inContinent(fi)) return;
+  if(activeFeatIdx!==null&&!answered.has(activeFeatIdx)&&!revealed.has(activeFeatIdx)){
+    setFeatureColor(activeFeatIdx,C.land);
+  }
+  activeFeatIdx=fi;
+  const uPos=unanswered.indexOf(fi);if(uPos!==-1)uIdx=uPos;
+  const feat=geoData.features[fi];
+  if(!answered.has(fi)&&!revealed.has(fi)) setFeatureColor(fi,C.active);
+  populatePanel(fi);
+  if(!answered.has(fi)&&!revealed.has(fi)&&!gameOver) focusPanelInput();
+  rotateTo(feat, null);
+  updateNavButtons();updateCounterSide();
+  highlightListItem(feat.properties.ISO_A3);
+}
+
+function populatePanel(fi){
+  const feat=geoData.features[fi],p=feat.properties,isDone=answered.has(fi)||revealed.has(fi);
+  const uPos=unanswered.indexOf(fi);
+  document.getElementById("q-counter-side").textContent=uPos!==-1?`Unanswered ${uPos+1}/${unanswered.length}`:answered.has(fi)?"✓ answered":"revealed";
+  document.getElementById("side-prompt").textContent=mode==="countries"?"Which country is this?":mode==="capitals"?`Capital of ${p.ADMIN}?`:"Name this country and its capital.";
+  const inpC=document.getElementById("panel-input-country"),inpCap=document.getElementById("panel-input-capital");
+  const sc=mode==="countries"||mode==="both",scp=mode==="capitals"||mode==="both";
+  document.getElementById("panel-country-row").style.display=sc?"block":"none";
+  document.getElementById("panel-capital-row").style.display=scp?"block":"none";
+  inpC.value="";inpCap.value="";
+  inpC.classList.remove("ok","bad");inpCap.classList.remove("ok","bad");
+  inpC.disabled=false;inpCap.disabled=false;
+  cDone=false;capDone=false;
+  document.getElementById("panel-feedback").textContent="";document.getElementById("panel-feedback").className="";
+  document.getElementById("btn-skip").disabled=isDone||gameOver;
+  if(isDone){
+    if(sc){inpC.value=p.ADMIN;inpC.classList.add("ok");inpC.disabled=true;}
+    if(scp){inpCap.value=p.capital_name||"N/A";inpCap.classList.add("ok");inpCap.disabled=true;}
+    document.getElementById("panel-feedback").textContent=answered.has(fi)?"✓ correct":`revealed: ${p.ADMIN}${p.capital_name?" · "+p.capital_name:""}`;
+    document.getElementById("panel-feedback").className=answered.has(fi)?"correct":"wrong";
+  }
+}
+
+function focusPanelInput(){
+  if(gameOver) return;
+  const sc=mode==="countries"||mode==="both";
+  const el=document.getElementById(sc?"panel-input-country":"panel-input-capital");
+  if(el&&!el.disabled) el.focus();
+}
+
+function selectAndShowCountry(fi, fast=false){
+  if(activeFeatIdx!==null&&!answered.has(activeFeatIdx)&&!revealed.has(activeFeatIdx)){
+    setFeatureColor(activeFeatIdx,C.land);
+  }
+  activeFeatIdx=fi;
+  if(!answered.has(fi)&&!revealed.has(fi)) setFeatureColor(fi,C.active);
+  populatePanel(fi);
+  if(!answered.has(fi)&&!revealed.has(fi)) focusPanelInput();
+  rotateTo(geoData.features[fi], null, fast);
+  updateNavButtons();updateCounterSide();
+  highlightListItem(null);
+}
+
+function goNext(){if(unanswered.length===0)return;uIdx=(uIdx+1)%unanswered.length;selectAndShowCountry(unanswered[uIdx]);}
+function goPrev(){if(unanswered.length===0)return;uIdx=(uIdx-1+unanswered.length)%unanswered.length;selectAndShowCountry(unanswered[uIdx]);}
+
+function updateNavButtons(){
+  const no=unanswered.length===0;
+  document.getElementById("btn-prev-side").disabled=no;
+  document.getElementById("btn-next-side").disabled=no;
+}
+function updateCounterSide(){
+  document.getElementById("q-counter-side").textContent=unanswered.length>0?`${unanswered.length} unanswered remaining`:"All answered!";
+}
+function highlightListItem(iso){
+  document.querySelectorAll(".answer-item").forEach(el=>el.classList.remove("active-item"));
+  if(iso){const el=document.querySelector(`.answer-item[data-iso="${iso}"]`);if(el){el.classList.add("active-item");el.scrollIntoView({block:"nearest",behavior:"smooth"});}}
+}
+
+let cDone=false,capDone=false;
+function checkInputs(){
+  if(activeFeatIdx===null)return;
+  const fi=activeFeatIdx;
+  if(answered.has(fi)||revealed.has(fi)||gameOver)return;
+  const feat=geoData.features[fi],p=feat.properties;
+  const inpC=document.getElementById("panel-input-country"),inpCap=document.getElementById("panel-input-capital");
+  const nc=mode==="countries"||mode==="both",ncp=(mode==="capitals"||mode==="both")&&p.capital_name;
+
+  const prevCDone=cDone, prevCapDone=capDone;
+
+  if(nc&&!cDone){
+    const alts=[p.ADMIN,p.NAME,p.NAME_LONG,p.FORMAL_EN,p.BRK_NAME].filter(Boolean).map(norm);
+    cDone=alts.includes(norm(inpC.value));
+    if(cDone){inpC.classList.add("ok");inpC.classList.remove("bad");}
+  } else if(!nc) cDone=true;
+
+  if(ncp&&!capDone){
+    capDone=norm(inpCap.value)===norm(p.capital_name);
+    if(capDone){inpCap.classList.add("ok");inpCap.classList.remove("bad");}
+  } else if(!ncp) capDone=true;
+
+  if(mode==="both"){
+    if(cDone&&!prevCDone){inpC.disabled=true;if(!capDone) inpCap.focus();}
+    if(capDone&&!prevCapDone){inpCap.disabled=true;if(!cDone) inpC.focus();}
+  }
+
+  if(cDone&&capDone) markAnswered(fi);
+}
+
+function markAnswered(fi){
+  answered.add(fi);
+  const pos=unanswered.indexOf(fi);if(pos!==-1){unanswered.splice(pos,1);if(uIdx>=unanswered.length)uIdx=Math.max(0,unanswered.length-1);}
+  score++;updateScoreDisplay();updateNavButtons();updateCounterSide();
+  const feat=geoData.features[fi];
+  setFeatureColor(fi,C.correct);
+  if(featureCapDot[fi]) featureCapDot[fi].visible=true;
+  addListItem(feat,true,fi);updateProgress();
+  document.getElementById("panel-feedback").textContent="✓ correct!";document.getElementById("panel-feedback").className="correct";
+  document.getElementById("panel-input-country").disabled=true;document.getElementById("panel-input-capital").disabled=true;
+  document.getElementById("btn-skip").disabled=true;
+  checkAllDone();
+  if(!gameOver&&unanswered.length>0){const sf=fi;setTimeout(()=>{if(activeFeatIdx===sf){const nf=unanswered[uIdx];activeFeatIdx=nf;selectAndShowCountry(nf,true);}},400);}
+}
+
+function addListItem(feat,correct,fi){
+  const p=feat.properties,iso=featKey(p);
+  const list=document.getElementById("answer-list");
+  const item=document.createElement("div");item.className="answer-item";item.dataset.iso=iso;item.dataset.fi=fi;
+  item.innerHTML=`<span class="dot ${correct?"ok":"no"}"></span><span class="a-name">${p.ADMIN}</span>`+(p.capital_name?`<span class="a-cap">· ${p.capital_name}</span>`:"");
+  item.addEventListener("click",()=>{onClickFeatureIdx(parseInt(item.dataset.fi));});
+  list.appendChild(item);list.scrollTop=list.scrollHeight;
+}
+
+function updateProgress(){const d=answered.size+revealed.size,t=questions.length;document.getElementById("progress-bar-fill").style.width=Math.round(d/t*100)+"%";document.getElementById("progress-text").textContent=`${d} / ${t}`;}
+function updateScoreDisplay(){document.getElementById("score-num").textContent=score;document.getElementById("score-total").textContent=answered.size+revealed.size;}
+function checkAllDone(){if(answered.size+revealed.size===questions.length){gameOver=true;document.getElementById("giveup-banner").classList.add("show");document.getElementById("btn-giveup").disabled=true;}}
+
+document.getElementById("btn-skip").addEventListener("click",()=>{
+  if(activeFeatIdx===null||gameOver)return;
+  const fi=activeFeatIdx;if(answered.has(fi)||revealed.has(fi))return;
+  revealed.add(fi);
+  const pos=unanswered.indexOf(fi);if(pos!==-1){unanswered.splice(pos,1);if(uIdx>=unanswered.length)uIdx=Math.max(0,unanswered.length-1);}
+  const feat=geoData.features[fi];
+  setFeatureColor(fi,C.giveup);
+  if(featureCapDot[fi]) featureCapDot[fi].visible=true;
+  addListItem(feat,false,fi);
+  updateProgress();updateScoreDisplay();updateNavButtons();updateCounterSide();
+  const p=feat.properties,sc=mode==="countries"||mode==="both",scp=mode==="capitals"||mode==="both";
+  if(sc){document.getElementById("panel-input-country").value=p.ADMIN;document.getElementById("panel-input-country").classList.add("ok");document.getElementById("panel-input-country").disabled=true;}
+  if(scp){document.getElementById("panel-input-capital").value=p.capital_name||"N/A";document.getElementById("panel-input-capital").classList.add("ok");document.getElementById("panel-input-capital").disabled=true;}
+  document.getElementById("panel-feedback").textContent=`revealed: ${p.ADMIN}${p.capital_name?" · "+p.capital_name:""}`;
+  document.getElementById("panel-feedback").className="wrong";document.getElementById("btn-skip").disabled=true;
+  checkAllDone();
+});
+
+document.getElementById("btn-giveup").addEventListener("click",()=>{
+  if(gameOver)return;if(!confirm("Reveal all remaining unanswered countries?"))return;
+  [...unanswered].forEach(fi=>{
+    revealed.add(fi);const feat=geoData.features[fi];
+    setFeatureColor(fi,C.giveup);
+    if(featureCapDot[fi]) featureCapDot[fi].visible=true;
+    addListItem(feat,false,fi);
+  });
+  unanswered.length=0;updateProgress();updateScoreDisplay();updateNavButtons();updateCounterSide();
+  gameOver=true;document.getElementById("btn-giveup").disabled=true;
+  document.getElementById("giveup-banner").classList.add("show");
+});
+
+document.getElementById("btn-next-side").addEventListener("click",goNext);
+document.getElementById("btn-prev-side").addEventListener("click",goPrev);
+
+document.addEventListener("keydown",e=>{
+  if(document.activeElement&&document.activeElement.tagName==="INPUT") return;
+  if(e.key==="ArrowRight") goNext();
+  else if(e.key==="ArrowLeft") goPrev();
+});
+
+["panel-input-country","panel-input-capital"].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener("input",()=>checkInputs());
+  el.addEventListener("keydown",e=>{
+    if(e.key!=="Enter")return;
+    if(activeFeatIdx!==null&&(answered.has(activeFeatIdx)||revealed.has(activeFeatIdx))){goNext();return;}
+    if(!el.classList.contains("ok")&&el.value.length>0){
+      const p=geoData.features[activeFeatIdx].properties;let ok=false;
+      if(id==="panel-input-country")ok=[p.ADMIN,p.NAME,p.NAME_LONG,p.FORMAL_EN,p.BRK_NAME].filter(Boolean).map(norm).includes(norm(el.value));
+      else ok=norm(el.value)===norm(p.capital_name);
+      if(!ok){el.classList.add("bad");setTimeout(()=>el.classList.remove("bad"),400);}
+    }
+    checkInputs();
+  });
+});
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+(async()=>{await loadData();})();
+</script>
+</body>
+</html>
