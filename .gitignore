@@ -2,3 +2,4 @@ node_modules/
 _baseline/
 __pycache__/
 .claude/
+website/
