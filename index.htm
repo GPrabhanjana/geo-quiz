@@ -38,6 +38,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;heig
 .mode-card .mode-title{font-size:.82rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase}
 .mode-card .mode-desc{font-size:.72rem;color:var(--muted);margin-top:4px}
 
+#splash-credit{font-size:.68rem;color:var(--muted);letter-spacing:.04em}
+#splash-credit a{color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border);transition:color .15s,border-color .15s}
+#splash-credit a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
 /* HEADER */
 header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:10}
 header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:-.01em}
@@ -64,7 +68,7 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 #sidebar{width:270px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 
 /* Question area at top of sidebar */
-#side-question{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+#side-question{padding:14px 16px 4px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
 #q-counter-side{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 #side-prompt{font-family:'DM Serif Display',serif;font-size:1rem;line-height:1.3;color:var(--text);margin-bottom:2px}
 .panel-input-label{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
@@ -78,11 +82,18 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 #panel-feedback.wrong{color:var(--wrong)}
 
 /* Nav buttons */
-#side-nav{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+#side-nav{padding:3px 16px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
 .side-btn-row{display:flex;gap:6px}
 .side-btn{flex:1;font-family:'DM Mono',monospace;font-size:.7rem;padding:6px 0;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;transition:border-color .15s}
 .side-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .side-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* Keyboard hints */
+#kbd-hints{display:flex;flex-direction:column;gap:3px;margin-top:2px}
+#kbd-hints span{font-size:.6rem;color:var(--muted);letter-spacing:.04em;display:flex;align-items:center;gap:3px}
+#kbd-hints kbd{font-family:'DM Mono',monospace;font-size:.58rem;border:1px solid var(--border);border-bottom-width:2px;
+  border-radius:2px;padding:0 3px;background:var(--bg);color:var(--text)}
+#kbd-hints span.dim{opacity:.35}
 
 /* Progress */
 #progress-area{padding:10px 16px;border-bottom:1px solid var(--border)}
@@ -167,10 +178,13 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
   #side-danger{flex-direction:row;gap:8px;padding:8px 12px}
   #btn-skip,#btn-giveup{flex:1}
 
+  /* No ctrl key on touch devices */
+  #kbd-hints{display:none}
+
   /* Inputs bigger for touch */
   .panel-input{font-size:.9rem;padding:8px 10px}
-  #side-question{padding:10px 12px}
-  #side-nav{padding:8px 12px}
+  #side-question{padding:10px 12px 4px}
+  #side-nav{padding:3px 12px 8px}
   #progress-area{padding:8px 12px}
 
   /* Giveup banner */
@@ -192,6 +206,7 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
     <div class="mode-card" onclick="startGame('capitals')"><span class="mode-icon">🏛️</span><div class="mode-title">Capitals</div><div class="mode-desc">See country name, name the capital</div></div>
     <div class="mode-card" onclick="startGame('both')"><span class="mode-icon">🌍</span><div class="mode-title">Countries &amp; Capitals</div><div class="mode-desc">Name both from the outline</div></div>
   </div>
+  <p id="splash-credit">built by <a href="https://gprabhanjana.netlify.app/" target="_blank" rel="noopener noreferrer">Prabhanjana</a></p>
 </div>
 
 <div id="loading">
@@ -209,7 +224,7 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 
 <div id="giveup-banner">
   <strong>Game over.</strong> All countries revealed — click any to review.
-  <button id="btn-play-again" onclick="showSplash()">Play again</button>
+  <button id="btn-play-again" onclick="playAgain()">Play again</button>
 </div>
 
 <div id="main">
@@ -248,6 +263,10 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
         <button class="side-btn" id="btn-prev-side" disabled>← prev</button>
         <button class="side-btn" id="btn-next-side">next →</button>
       </div>
+      <div id="kbd-hints">
+        <span><kbd>Ctrl</kbd><kbd>←</kbd><kbd>→</kbd> prev / next</span>
+        <span id="kbd-hint-fields"><kbd>Ctrl</kbd><kbd>↑</kbd><kbd>↓</kbd> country / capital</span>
+      </div>
     </div>
 
     <div id="progress-area">
@@ -281,18 +300,16 @@ const C = {
   blocked: 0x4a4a4a,   // dark grey for disputed/Antarctica
 };
 
-const GLOBE_R = 1.0;
+// A finished country that is also selected darkens rather than turning yellow.
+// Once a game is over every country is green or red, so yellow-for-selected
+// would be the only colour left on the map; darkening keeps selection legible
+// against its neighbours instead. Derived from the base colours so the two
+// cannot drift apart, and shared by the country fill and its locator ring.
+const SELECTED_DARKEN = 0.45;
+C.correctSel = new THREE.Color(C.correct).multiplyScalar(SELECTED_DARKEN).getHex();
+C.giveupSel  = new THREE.Color(C.giveup ).multiplyScalar(SELECTED_DARKEN).getHex();
 
-// ─────────────────────────────────────────────
-//  ROBUST FEATURE KEY
-//  QGIS processing can reset ISO_A3 to "" or "-99".
-//  Fall back to ADMIN name so the feature still works.
-// ─────────────────────────────────────────────
-function featKey(props){
-  const iso = props.ISO_A3;
-  if(iso && iso !== "-99" && iso !== "-9" && iso.trim() !== "") return iso;
-  return "ADMIN:" + (props.ADMIN || props.NAME || "unknown");
-}
+const GLOBE_R = 1.0;
 
 // ─────────────────────────────────────────────
 //  STATE
@@ -318,20 +335,71 @@ const MIN_ZOOM = 1.4, MAX_ZOOM = 8;
 let animFrameId = null;
 
 const featureMeshes = {}; // fi -> THREE.Mesh[]
-const featureCapDot = {}; // fi -> THREE.Mesh  (keyed by fi, not ISO)
+const featureCapDot = {}; // fi -> THREE.Mesh
+const featureHalo   = {}; // fi -> THREE.Mesh  (locator ring for tiny countries)
+let haloMeshes = [];      // same meshes as a flat list, for raycasting
+let haloTexture = null, haloGeometry = null;
+const haloColor = new THREE.Color();
+
+// A country gets a locator ring if its LARGEST single landmass is under this
+// many square degrees. Two refinements over the obvious measure, both aimed at
+// archipelagos: a bounding box would call Tuvalu mid-sized because its atolls
+// are strewn across 3 degrees of ocean, and total area would clear the Bahamas,
+// Fiji, the Solomons and Vanuatu even though none of them has an island you can
+// actually pick out. For a compact country the largest polygon is the total, so
+// this only ever adds the scattered case. Selects 41 countries.
+const HALO_MAX_LAND_SQDEG = 1.0;
+// The ring fades out once the country is big enough on screen to find unaided.
+const HALO_FULL_PX = 14, HALO_HIDE_PX = 46;
+// ...and never draws smaller than this across, however far out the globe is.
+const HALO_MIN_PX = 30;
+// Hard ceiling on the drawn oval, in world units (~17 degrees of arc). Past this
+// the plane is fighting the curvature of the globe and reads as a smear.
+const HALO_MAX_WORLD = 0.30;
+// How far an unselected ring is dimmed relative to the selected one.
+const HALO_DIM = 0.72;
+// Capital dots follow the same rule as the rings: hold a constant on-screen
+// size rather than a constant world size. Fixed in world units they were a
+// speck on a world view and a boulder swallowing the city when zoomed in.
+const CAPDOT_BASE_R = 0.012;   // geometry radius the scale factor is relative to
+const CAPDOT_PX = 4.5;         // on-screen radius it is held at
+// Shared across every country: borders and capital dots are never recoloured
+// individually, so they do not need a material instance each.
+const borderMaterial = new THREE.LineBasicMaterial({color:0x888888,linewidth:1});
+const capitalMaterial = new THREE.MeshBasicMaterial({color:C.capital});
 // blocked layer meshes (not interactive, not colored by game state)
 let blockedMeshes = [];
 
 // ─────────────────────────────────────────────
 //  UTILITY
 // ─────────────────────────────────────────────
+// Fold a typed answer down to a comparison key, Sporcle-style: case, accents,
+// punctuation and spacing never matter, and neither do the spelling conventions
+// that vary by writer ("&"/"and", "St."/"Saint", a leading "The"). Keeping this
+// generous is what lets the alias lists in the data stay short - they carry only
+// genuinely different names, not spelling variants.
 function norm(s){
   if(!s) return "";
-  return s.toLowerCase()
-    .replace(/['''\u2018\u2019\-\u2013\u2014]/g,"")
-    .replace(/[éèêë]/g,"e").replace(/[àâä]/g,"a").replace(/[ùûü]/g,"u")
-    .replace(/[îï]/g,"i").replace(/[ôö]/g,"o").replace(/[ñ]/g,"n")
-    .replace(/[ç]/g,"c").replace(/[ß]/g,"ss").replace(/\s+/g,"");
+  return s.normalize("NFD").replace(/[̀-ͯ]/g,"")   // strip all accents
+    .toLowerCase()
+    .replace(/ß/g,"ss").replace(/ø/g,"o")
+    .replace(/đ/g,"d").replace(/ł/g,"l")
+    .replace(/&/g," and ")
+    .replace(/[^a-z0-9\s]/g,"")          // drop apostrophes, hyphens, periods, commas
+    .replace(/\b(st|ste)\b/g,"saint")
+    .replace(/^the\s+/,"")
+    .replace(/\s+/g,"");
+}
+
+// Answer matching, shared by the live input handler and the Enter handler.
+// Those were separate copies of this logic that had already drifted apart.
+function matchesCountry(p,val){
+  const v=norm(val);
+  return v!=="" && [p.name,...(p.name_alt||[])].some(n=>norm(n)===v);
+}
+function matchesCapital(p,val){
+  const v=norm(val);
+  return v!=="" && [p.capital,...(p.capital_alt||[])].some(n=>norm(n)===v);
 }
 
 function latlonToVec3(lon,lat,r){
@@ -359,8 +427,8 @@ let selectedContinent = "World";
 async function loadData(){
   // Both fetches in parallel — silent, no UI updates
   const [countries, blocked] = await Promise.all([
-    tryFetch("countries_197_with_capitals.geojson"),
-    tryFetch("blocked.geojson")
+    tryFetch("countries.geojson"),
+    tryFetch("blocked_slim.geojson")
   ]);
 
   geoData     = countries || await pickFile("Select countries GeoJSON");
@@ -370,7 +438,7 @@ async function loadData(){
 
   // Populate continent dropdown from actual data
   const continents = [...new Set(
-    geoData.features.map(f=>f.properties.CONTINENT).filter(Boolean)
+    geoData.features.map(f=>f.properties.continent).filter(Boolean)
   )].sort();
   const sel = document.getElementById("continent-select");
   continents.forEach(c=>{
@@ -437,8 +505,10 @@ function sphericallySubdivide(lonlats, triIndices, R, maxDeg){
   let tris=new Int32Array(triIndices);
   const edgeCache={};
 
+  function edgeKey(a,b){ return a<b?`${a}_${b}`:`${b}_${a}`; }
+
   function midpoint(a,b){
-    const key=a<b?`${a}_${b}`:`${b}_${a}`;
+    const key=edgeKey(a,b);
     if(edgeCache[key]!==undefined) return edgeCache[key];
     const va=latlonToVec3(pts[a][0],pts[a][1],1);
     const vb=latlonToVec3(pts[b][0],pts[b][1],1);
@@ -456,27 +526,56 @@ function sphericallySubdivide(lonlats, triIndices, R, maxDeg){
     return Math.sqrt(dx*dx+dy*dy);
   }
 
+  // Two phases per pass. Deciding per triangle whether to split leaves
+  // T-junctions: a long-edged triangle splits a border it shares with a
+  // short-edged neighbour that does not, so one side gains a midpoint the other
+  // lacks and the seam opens into a hairline crack showing the ocean through.
+  // Instead, first collect every edge that needs splitting, then split each
+  // triangle to match whichever of its edges are in that set. An edge is now
+  // always split on both sides, from the same cached midpoint.
   for(let pass=0;pass<4;pass++){
-    let subdivided=false;
+    const splitEdges=new Set();
+    for(let i=0;i<tris.length;i+=3){
+      const i0=tris[i],i1=tris[i+1],i2=tris[i+2];
+      if(edgeLenDeg(i0,i1)>maxDeg) splitEdges.add(edgeKey(i0,i1));
+      if(edgeLenDeg(i1,i2)>maxDeg) splitEdges.add(edgeKey(i1,i2));
+      if(edgeLenDeg(i2,i0)>maxDeg) splitEdges.add(edgeKey(i2,i0));
+    }
+    if(splitEdges.size===0) break;
+
     const newTris=[];
     for(let i=0;i<tris.length;i+=3){
       const i0=tris[i],i1=tris[i+1],i2=tris[i+2];
-      const l01=edgeLenDeg(i0,i1);
-      const l12=edgeLenDeg(i1,i2);
-      const l20=edgeLenDeg(i2,i0);
-      if(l01>maxDeg||l12>maxDeg||l20>maxDeg){
-        subdivided=true;
-        const m01=midpoint(i0,i1);
-        const m12=midpoint(i1,i2);
-        const m20=midpoint(i2,i0);
+      const s01=splitEdges.has(edgeKey(i0,i1));
+      const s12=splitEdges.has(edgeKey(i1,i2));
+      const s20=splitEdges.has(edgeKey(i2,i0));
+      const n=(s01?1:0)+(s12?1:0)+(s20?1:0);
+
+      if(n===0){ newTris.push(i0,i1,i2); continue; }
+      if(n===3){
+        const m01=midpoint(i0,i1),m12=midpoint(i1,i2),m20=midpoint(i2,i0);
         newTris.push(i0,m01,m20, m01,i1,m12, m20,m12,i2, m01,m12,m20);
+      } else if(n===1){
+        // one split edge: fan the new vertex to the opposite corner
+        if(s01){const m=midpoint(i0,i1); newTris.push(i0,m,i2, m,i1,i2);}
+        else if(s12){const m=midpoint(i1,i2); newTris.push(i1,m,i0, m,i2,i0);}
+        else {const m=midpoint(i2,i0); newTris.push(i2,m,i1, m,i0,i1);}
       } else {
-        newTris.push(i0,i1,i2);
+        // two split edges: corner triangle plus a quad split in two
+        if(!s20){
+          const m01=midpoint(i0,i1),m12=midpoint(i1,i2);
+          newTris.push(i1,m12,m01, m01,m12,i2, m01,i2,i0);
+        } else if(!s01){
+          const m12=midpoint(i1,i2),m20=midpoint(i2,i0);
+          newTris.push(i2,m20,m12, m12,m20,i0, m12,i0,i1);
+        } else {
+          const m01=midpoint(i0,i1),m20=midpoint(i2,i0);
+          newTris.push(i0,m01,m20, m01,i1,m20, m20,i1,i2);
+        }
       }
     }
-    // Use typed array to avoid Chrome stack overflow from spread on large arrays
+    // Typed array to avoid Chrome stack overflow from spread on large arrays
     tris = new Int32Array(newTris);
-    if(!subdivided) break;
   }
 
   const positions=new Float32Array(pts.length*3);
@@ -552,7 +651,10 @@ function polygonToGeometry(polygon, radius){
     lonlats.push(ll||[clon,clat]);
   }
 
-  const {positions,indices}=sphericallySubdivide(lonlats,triIndices,radius,2);
+  // 4 degrees, not 2: each pass quadruples the triangle count, and at 4 deg the
+  // flat chord sits 1-cos(2 deg) = 0.0006 globe radii off the true sphere, which
+  // is under a pixel even at maximum zoom.
+  const {positions,indices}=sphericallySubdivide(lonlats,triIndices,radius,4);
 
   const geo=new THREE.BufferGeometry();
   geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
@@ -560,14 +662,43 @@ function polygonToGeometry(polygon, radius){
   return geo;
 }
 
-function polygonToLines(polygon){
+// Concatenate many BufferGeometries into one, so a country made of hundreds of
+// islands still costs a single draw call. Canada alone is 412 polygons; built
+// one mesh each that was ~7,300 scene objects for the world, which is what made
+// the globe lag. three.min.js does not ship BufferGeometryUtils, hence by hand.
+function mergeGeometries(geos, indexed){
+  let vTotal=0, iTotal=0;
+  for(const g of geos){
+    vTotal += g.attributes.position.count;
+    if(indexed) iTotal += g.index.count;
+  }
+  const positions=new Float32Array(vTotal*3);
+  const indices=indexed?new Uint32Array(iTotal):null;
+  let vOff=0, iOff=0;
+  for(const g of geos){
+    positions.set(g.attributes.position.array, vOff*3);
+    if(indexed){
+      const src=g.index.array;
+      for(let i=0;i<src.length;i++) indices[iOff+i]=src[i]+vOff;
+      iOff+=src.length;
+    }
+    vOff+=g.attributes.position.count;
+  }
+  const out=new THREE.BufferGeometry();
+  out.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  if(indexed) out.setIndex(new THREE.BufferAttribute(indices,1));
+  return out;
+}
+
+function polygonToLines(polygon, radius){
+  radius = radius || (GLOBE_R+0.006);
   const segs=[];
   for(const rawRing of polygon){
     const ring=fixRing(rawRing);
     const n=ring.length;
     for(let i=0;i<n-1;i++){
-      const a=latlonToVec3(ring[i][0],ring[i][1],GLOBE_R+0.006);
-      const b=latlonToVec3(ring[i+1][0],ring[i+1][1],GLOBE_R+0.006);
+      const a=latlonToVec3(ring[i][0],ring[i][1],radius);
+      const b=latlonToVec3(ring[i+1][0],ring[i+1][1],radius);
       if(Math.abs(ring[i][0]-ring[i+1][0])>90) continue;
       segs.push(a,b);
     }
@@ -613,6 +744,7 @@ function initThree(){
 
   buildCountryMeshes();
   buildCapitalDots();
+  buildSmallCountryHalos();
 
   scene.add(new THREE.AmbientLight(0xffffff,1.0));
 
@@ -652,33 +784,36 @@ function buildBlockedMeshes(){
   const fillRadius = GLOBE_R + 0.001;
   const lineRadius  = GLOBE_R + 0.004;
 
+  // The blocked layer is never recoloured per feature, so the whole layer can
+  // collapse into one fill mesh and one outline.
+  const fills=[], outlines=[];
   blockedData.features.forEach(feature=>{
     if(!feature.geometry) return;
-    const polys=getFeaturePolygons(feature);
-    for(const poly of polys){
+    for(const poly of getFeaturePolygons(feature)){
       const geo=polygonToGeometry(poly, fillRadius);
-      if(geo){
-        const mat=new THREE.MeshBasicMaterial({
-          color: C.blocked,
-          side: THREE.DoubleSide,
-          polygonOffset: true,
-          polygonOffsetFactor: 1,
-          polygonOffsetUnits: 1
-        });
-        const mesh=new THREE.Mesh(geo,mat);
-        globe.add(mesh);
-        blockedMeshes.push(mesh);
-      }
-      // Subtle outline
-      const outGeo=polygonToLines(poly);
-      if(outGeo){
-        const outMat=new THREE.LineBasicMaterial({color:0x666666,linewidth:1});
-        const lines=new THREE.LineSegments(outGeo,outMat);
-        globe.add(lines);
-        blockedMeshes.push(lines);
-      }
+      if(geo) fills.push(geo);
+      const outGeo=polygonToLines(poly, lineRadius);
+      if(outGeo) outlines.push(outGeo);
     }
   });
+
+  if(fills.length){
+    const mesh=new THREE.Mesh(mergeGeometries(fills,true),new THREE.MeshBasicMaterial({
+      color:C.blocked,
+      side:THREE.DoubleSide,
+      polygonOffset:true,
+      polygonOffsetFactor:1,
+      polygonOffsetUnits:1
+    }));
+    globe.add(mesh);
+    blockedMeshes.push(mesh);
+  }
+  if(outlines.length){
+    const lines=new THREE.LineSegments(mergeGeometries(outlines,false),
+      new THREE.LineBasicMaterial({color:0x666666,linewidth:1}));
+    globe.add(lines);
+    blockedMeshes.push(lines);
+  }
 }
 
 function buildCountryMeshes(){
@@ -690,39 +825,41 @@ function buildCountryMeshes(){
   countryMeshes=[];
 
   geoData.features.forEach((feature,fi)=>{
-    const iso=featKey(feature.properties);
     if(feature.geometry==null) return;
-    const polys=getFeaturePolygons(feature);
-    const meshArr=[];
+    const fills=[], outlines=[];
 
-    for(const poly of polys){
+    for(const poly of getFeaturePolygons(feature)){
       const geo=polygonToGeometry(poly);
-      if(geo){
-        const mat=new THREE.MeshBasicMaterial({
-          color:getColor(fi),
-          side:THREE.DoubleSide,
-          polygonOffset:true,
-          polygonOffsetFactor:-1,
-          polygonOffsetUnits:-1
-        });
-        const mesh=new THREE.Mesh(geo,mat);
-        mesh.userData={fi,iso};
-        globe.add(mesh);
-        meshArr.push(mesh);
-        countryMeshes.push(mesh);
-      }
+      if(geo) fills.push(geo);
       const outGeo=polygonToLines(poly);
-      if(outGeo){
-        const outMat=new THREE.LineBasicMaterial({color:0x888888,linewidth:1});
-        const lines=new THREE.LineSegments(outGeo,outMat);
-        globe.add(lines);
-        meshArr.push(lines);
-      }
+      if(outGeo) outlines.push(outGeo);
     }
-    if(meshArr.filter(m=>m.isMesh).length===0){
-      console.warn(`[GeoQuiz] No mesh built for fi=${fi} iso=${iso} name=${feature.properties.ADMIN} — geometry may be degenerate`);
+
+    const meshArr=[];
+    if(fills.length){
+      // One mesh per country, not per polygon. Its material is the country's
+      // own, since getColor(fi) has to be able to recolour it independently.
+      const mesh=new THREE.Mesh(mergeGeometries(fills,true),new THREE.MeshBasicMaterial({
+        color:getColor(fi),
+        side:THREE.DoubleSide,
+        polygonOffset:true,
+        polygonOffsetFactor:-1,
+        polygonOffsetUnits:-1
+      }));
+      mesh.userData={fi};
+      globe.add(mesh);
+      meshArr.push(mesh);
+      countryMeshes.push(mesh);
+    } else {
+      console.warn(`[GeoQuiz] No mesh built for fi=${fi} name=${feature.properties.name} — geometry may be degenerate`);
     }
-    featureMeshes[fi]=meshArr; // keyed by fi, not ISO
+    if(outlines.length){
+      // Borders never change colour, so every country shares one material.
+      const lines=new THREE.LineSegments(mergeGeometries(outlines,false),borderMaterial);
+      globe.add(lines);
+      meshArr.push(lines);
+    }
+    featureMeshes[fi]=meshArr;
   });
 }
 
@@ -730,31 +867,206 @@ function buildCapitalDots(){
   for(const iso in featureCapDot) globe.remove(featureCapDot[iso]);
   Object.keys(featureCapDot).forEach(k=>delete featureCapDot[k]);
 
-  const dotGeo=new THREE.SphereGeometry(0.012,8,8);
+  const dotGeo=new THREE.SphereGeometry(CAPDOT_BASE_R,8,8);
   geoData.features.forEach((f,fi)=>{
-    const p=f.properties;
-    if(p.capital_lon==null||p.capital_lat==null) return;
-    const mat=new THREE.MeshBasicMaterial({color:C.capital});
-    const dot=new THREE.Mesh(dotGeo,mat.clone());
-    const v=latlonToVec3(p.capital_lon,p.capital_lat,GLOBE_R+0.008);
-    dot.position.copy(v);
+    const ll=f.properties.capital_lonlat;
+    if(!ll) return;
+    const dot=new THREE.Mesh(dotGeo,capitalMaterial);
+    dot.position.copy(latlonToVec3(ll[0],ll[1],GLOBE_R+0.008));
     dot.visible=answered.has(fi)||revealed.has(fi);
     globe.add(dot);
-    featureCapDot[fi]=dot; // keyed by fi
+    featureCapDot[fi]=dot;
   });
 }
 
+// ─────────────────────────────────────────────
+//  SMALL-COUNTRY LOCATOR RINGS
+//  Vatican City and Monaco are a couple of pixels wide on a world view, so a
+//  soft ring marks where they are. The gradient is transparent at both the
+//  centre and the outer edge, so it reads as a halo rather than a disc and
+//  never hides the country it is pointing at.
+// ─────────────────────────────────────────────
+function makeHaloTexture(){
+  const S=128, cv=document.createElement("canvas");
+  cv.width=cv.height=S;
+  const ctx=cv.getContext("2d");
+  // White with an alpha ramp so material.color can tint it to the country's
+  // current state colour. Transparent at the centre and at the rim, so it reads
+  // as a ring around the country rather than a disc covering it.
+  const g=ctx.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+  g.addColorStop(0.00,"rgba(255,255,255,0)");
+  g.addColorStop(0.56,"rgba(255,255,255,0)");
+  g.addColorStop(0.74,"rgba(255,255,255,0.95)");
+  g.addColorStop(0.88,"rgba(255,255,255,0.42)");
+  g.addColorStop(1.00,"rgba(255,255,255,0)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,S,S);
+  return new THREE.CanvasTexture(cv);
+}
+
+// The ring sits at this fraction of the plane's half-width in the gradient
+// above, so the plane has to be scaled up by its reciprocal for the drawn ring
+// to land on the country's edge rather than inside it.
+const HALO_RING_FRAC = 0.74;
+
+function buildSmallCountryHalos(){
+  for(const fi in featureHalo) globe.remove(featureHalo[fi]);
+  Object.keys(featureHalo).forEach(k=>delete featureHalo[k]);
+  haloTexture = haloTexture || makeHaloTexture();
+  haloGeometry = haloGeometry || new THREE.PlaneGeometry(1,1);
+  haloMeshes = [];
+
+  geoData.features.forEach((feature,fi)=>{
+    if(!feature.geometry) return;
+    let land=0;
+    for(const poly of getFeaturePolygons(feature)){
+      const ring=poly[0]; let s=0;
+      for(let i=0;i<ring.length-1;i++) s+=ring[i][0]*ring[i+1][1]-ring[i+1][0]*ring[i][1];
+      land=Math.max(land,Math.abs(s)/2);
+    }
+    if(!isFinite(land)||land>HALO_MAX_LAND_SQDEG) return;
+
+    const c=d3.geoCentroid(feature);
+    if(!isFinite(c[0])||!isFinite(c[1])) return;
+
+    // Extent of the whole country, so one oval encloses every island of an
+    // archipelago instead of ringing only the centroid. geoBounds reports
+    // west > east for a country straddling the antimeridian (Fiji, Kiribati),
+    // hence the wrap correction.
+    let lonExt, latExt;
+    try{
+      const bb=d3.geoBounds(feature);
+      lonExt=bb[1][0]-bb[0][0]; if(lonExt<0) lonExt+=360;
+      latExt=bb[1][1]-bb[0][1];
+    }catch(e){ lonExt=latExt=0; }
+    if(!isFinite(lonExt)||!isFinite(latExt)) lonExt=latExt=0;
+
+    const rad=Math.PI/180;
+    // Arc length on the globe. Longitude degrees shrink towards the poles.
+    let w=lonExt*rad*Math.cos(c[1]*rad)*GLOBE_R;
+    let h=latExt*rad*GLOBE_R;
+    // Kiribati spans 80 degrees of ocean; cap the stored extent here and clamp
+    // the drawn size again in updateHalos(), which is what actually binds.
+    w=Math.min(w,HALO_MAX_WORLD); h=Math.min(h,HALO_MAX_WORLD);
+
+    const mat=new THREE.MeshBasicMaterial({
+      map:haloTexture, transparent:true, depthWrite:false,
+      side:THREE.DoubleSide, opacity:0
+    });
+    const mesh=new THREE.Mesh(haloGeometry,mat);
+
+    // Lie the plane flat against the globe with north up, so the oval keeps its
+    // orientation relative to the country as the globe turns.
+    const pos=latlonToVec3(c[0],c[1],GLOBE_R+0.004);
+    const n=pos.clone().normalize();
+    let north=new THREE.Vector3(0,1,0);
+    north.sub(n.clone().multiplyScalar(north.dot(n)));
+    if(north.lengthSq()<1e-8){
+      north.set(0,0,1); north.sub(n.clone().multiplyScalar(north.dot(n)));
+    }
+    north.normalize();
+    const east=new THREE.Vector3().crossVectors(north,n).normalize();
+    mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(east,north,n));
+    mesh.position.copy(pos);
+
+    mesh.userData={fi, isHalo:true, baseW:w, baseH:h,
+                   sizeRad:Math.sqrt(land)*Math.PI/180};
+    mesh.visible=false;
+    globe.add(mesh);
+    featureHalo[fi]=mesh;
+    haloMeshes.push(mesh);
+  });
+}
+
+// Called every frame. Three things vary with the view: the ring fades once the
+// country is big enough to find unaided, it never shrinks below a readable size
+// on screen, and it carries the country's own state colour.
+// World units per screen pixel at the globe's surface, for the current camera.
+function worldPerPixel(){
+  const h=renderer.domElement.clientHeight||600;
+  const pxPerRadian=h/(2*Math.tan(camera.fov*Math.PI/360));
+  return Math.max(0.05,camera.position.z-GLOBE_R)/pxPerRadian;
+}
+
+function updateCapitalDots(){
+  const s=CAPDOT_PX*worldPerPixel()/CAPDOT_BASE_R;
+  for(const fi in featureCapDot) featureCapDot[fi].scale.setScalar(s);
+}
+
+function updateHalos(){
+  const h=renderer.domElement.clientHeight||600;
+  const pxPerRadian=h/(2*Math.tan(camera.fov*Math.PI/360));
+  const eye=Math.max(0.05,camera.position.z-GLOBE_R);
+  const worldPerPx=worldPerPixel();
+  const minSize=HALO_MIN_PX*worldPerPx/HALO_RING_FRAC;
+
+  for(const fi in featureHalo){
+    const mesh=featureHalo[fi];
+    const d=mesh.userData;
+
+    const px=d.sizeRad/eye*pxPerRadian;
+    let o = px>=HALO_HIDE_PX ? 0
+          : px<=HALO_FULL_PX ? 1
+          : (HALO_HIDE_PX-px)/(HALO_HIDE_PX-HALO_FULL_PX);
+    if(!inContinent(+fi)) o=0;
+
+    mesh.material.opacity=o;
+    mesh.visible=o>0.01;
+    if(!mesh.visible) continue;
+
+    // Zoomed out the ring holds a minimum on-screen size so it stays findable;
+    // zoomed in it relaxes down onto the country's real extent. Clamped at the
+    // end rather than on the raw extent: the ring-fraction scale-up used to push
+    // Kiribati's oval past the cap to ~33 degrees, a smear across the Pacific
+    // that also swallowed clicks far out to sea.
+    mesh.scale.set(
+      Math.min(Math.max(d.baseW/HALO_RING_FRAC, minSize), HALO_MAX_WORLD),
+      Math.min(Math.max(d.baseH/HALO_RING_FRAC, minSize), HALO_MAX_WORLD),
+      1
+    );
+
+    // Answered/revealed beats selection, mirroring getColor()'s own precedence.
+    // Previously selection won here but not there, so picking a finished country
+    // lit a yellow ring around a green or red country -- and after a game over,
+    // when everything is finished, that was the only ring you ever saw.
+    // Selecting a finished country now darkens its own colour instead.
+    const sel=(+fi===activeFeatIdx);
+    if(answered.has(+fi)||revealed.has(+fi)){
+      haloColor.set(getColor(+fi));          // already the dark shade when selected
+      if(!sel) haloColor.multiplyScalar(HALO_DIM);
+    }
+    else if(sel)               haloColor.set(C.active);
+    // Unanswered and unselected deliberately does NOT follow the country: land
+    // grey dimmed is grey-on-grey and the ring all but vanishes against land,
+    // so it holds a muted yellow that stays legible over land and ocean alike.
+    else                       haloColor.set(C.active).multiplyScalar(HALO_DIM);
+    mesh.material.color.copy(haloColor);
+  }
+}
+
+
 function inContinent(fi){
   if(selectedContinent==="World") return true;
-  return geoData.features[fi]?.properties?.CONTINENT === selectedContinent;
+  return geoData.features[fi]?.properties?.continent === selectedContinent;
 }
 
 function getColor(fi){
   if(!inContinent(fi)) return C.blocked;
-  if(answered.has(fi)) return C.correct;
-  if(revealed.has(fi)) return C.giveup;
-  if(fi===activeFeatIdx) return C.active;
+  const sel = fi===activeFeatIdx;
+  if(answered.has(fi)) return sel ? C.correctSel : C.correct;
+  if(revealed.has(fi)) return sel ? C.giveupSel  : C.giveup;
+  if(sel) return C.active;
   return C.land;
+}
+
+// Move the selection, repainting whichever countries changed state. Callers used
+// to hand-roll this and skipped the repaint whenever the country was already
+// answered or revealed, so selecting a finished country changed nothing on the
+// globe. Routing every selection through getColor() keeps fill and ring in step.
+function setActiveFeature(fi){
+  const prev=activeFeatIdx;
+  activeFeatIdx=fi;
+  if(prev!==null&&prev!==fi) setFeatureColor(prev,getColor(prev));
+  if(fi!==null) setFeatureColor(fi,getColor(fi));
 }
 
 function refreshCountryColors(){
@@ -792,6 +1104,8 @@ function startRenderLoop(){
         isAnimatingRotation=false;
       }
     }
+    updateHalos();
+    updateCapitalDots();
     renderer.render(scene,camera);
   }
   loop();
@@ -803,6 +1117,55 @@ function onResize(){
   renderer.setSize(W,H);
   camera.aspect=W/H;
   camera.updateProjectionMatrix();
+}
+
+// ─────────────────────────────────────────────
+//  PICKING
+// ─────────────────────────────────────────────
+// Country meshes are DoubleSide, so a ray fired at empty ocean keeps going and
+// strikes whatever is on the far side of the planet — clicking the Pacific used
+// to select a country behind the globe. A surface point is only genuinely
+// visible if it faces the camera, which is what this rejects.
+function facesCamera(hit){
+  const outward=hit.point.clone().normalize();
+  return hit.point.clone().sub(camera.position).dot(outward) < 0;
+}
+
+function nearestVisible(raycaster, objects){
+  const hits=raycaster.intersectObjects(objects);
+  for(const hit of hits) if(facesCamera(hit)) return hit;
+  return null;
+}
+
+// Only the oval itself is clickable, not the square plane carrying it, so the
+// corners of the quad do not quietly swallow clicks meant for a neighbour.
+// Rings overlap wherever microstates cluster -- Vatican City and San Marino sit
+// ~18px apart at a normal zoom, and the Caribbean is denser still -- so ties go
+// to whichever ring centre the click is nearest, rather than to whichever plane
+// the ray happened to reach first.
+function nearestVisibleHalo(raycaster){
+  const hits=raycaster.intersectObjects(haloMeshes.filter(m=>m.visible));
+  let best=null, bestOffset=Infinity;
+  for(const hit of hits){
+    if(!facesCamera(hit)||!hit.uv) continue;
+    const dx=hit.uv.x-0.5, dy=hit.uv.y-0.5;
+    const offset=Math.sqrt(dx*dx+dy*dy);
+    if(offset<=0.5 && offset<bestOffset){ best=hit; bestOffset=offset; }
+  }
+  return best;
+}
+
+// Halos are checked BEFORE countries. Every microstate small enough to need a
+// ring is enclosed by, or sits against, something bigger — Monaco's ring lies
+// over France and Italy — so giving countries priority would mean the ring was
+// never clickable for exactly the countries it exists to help. Ceding a ~30px
+// disc of a large neighbour is the point of the feature, not a side effect.
+function pickFeature(raycaster){
+  const onHalo=nearestVisibleHalo(raycaster);
+  if(onHalo) return onHalo.object.userData.fi;
+  const onCountry=nearestVisible(raycaster,countryMeshes);
+  if(onCountry && onCountry.object.userData.fi!==undefined) return onCountry.object.userData.fi;
+  return null;
 }
 
 // ─────────────────────────────────────────────
@@ -844,11 +1207,8 @@ function setupInteraction(){
       mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
       mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
       raycaster.setFromCamera(mouse,camera);
-      const hits=raycaster.intersectObjects(countryMeshes);
-      if(hits.length>0){
-        const fi=hits[0].object.userData.fi;
-        if(fi!==undefined) onClickFeatureIdx(fi);
-      }
+      const fi=pickFeature(raycaster);
+      if(fi!==null) onClickFeatureIdx(fi);
     }
   });
 
@@ -956,7 +1316,7 @@ function startGame(m){
   selectedContinent = document.getElementById("continent-select")?.value || "World";
   const continentFeatures = geoData.features
     .map((_,i)=>i)
-    .filter(fi => selectedContinent==="World" || geoData.features[fi].properties.CONTINENT===selectedContinent);
+    .filter(fi => selectedContinent==="World" || geoData.features[fi].properties.continent===selectedContinent);
   questions=d3.shuffle(continentFeatures);
   unanswered=[...questions];uIdx=0;
   score=0;gameOver=false;answered.clear();revealed.clear();
@@ -969,6 +1329,9 @@ function startGame(m){
 
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     document.getElementById("giveup-banner").classList.remove("show");
+    // checkAllDone() disables this at game over; without resetting it here it
+    // stayed disabled for every later game.
+    document.getElementById("btn-giveup").disabled=false;
     document.getElementById("answer-list").innerHTML="<h3>Answered</h3>";
     const continentLabel = selectedContinent==="World" ? "" : ` · ${selectedContinent}`;
     document.getElementById("mode-badge").textContent=(m==="countries"?"Countries":m==="capitals"?"Capitals":"Countries & Capitals")+continentLabel;
@@ -991,14 +1354,14 @@ function startGame(m){
       buildBlockedMeshes();
       buildCountryMeshes();
       buildCapitalDots();
+      buildSmallCountryHalos();
     }
 
     updateScoreDisplay();updateNavButtons();updateCounterSide();
 
     if(unanswered.length>0){
       const fi=unanswered[0];
-      activeFeatIdx=fi;
-      setFeatureColor(fi,C.active);
+      setActiveFeature(fi);
       populatePanel(fi);
       focusPanelInput();
       rotateTo(geoData.features[fi], null);
@@ -1010,6 +1373,16 @@ function startGame(m){
   }));
 }
 
+// Replay the round just finished, same mode and same continent, without a
+// detour through the splash screen. startGame() reads the continent back off
+// the dropdown, so put the current selection there before restarting.
+function playAgain(){
+  if(!mode) return showSplash();
+  const sel=document.getElementById("continent-select");
+  if(sel) sel.value=selectedContinent;
+  startGame(mode);
+}
+
 function showSplash(){
   document.getElementById("splash").style.display="flex";
   document.getElementById("giveup-banner").classList.remove("show");
@@ -1018,25 +1391,19 @@ function showSplash(){
 function onClickFeatureIdx(fi){
   // Ignore clicks on out-of-continent countries
   if(!inContinent(fi)) return;
-  if(activeFeatIdx!==null&&!answered.has(activeFeatIdx)&&!revealed.has(activeFeatIdx)){
-    setFeatureColor(activeFeatIdx,C.land);
-  }
-  activeFeatIdx=fi;
+  setActiveFeature(fi);
   const uPos=unanswered.indexOf(fi);if(uPos!==-1)uIdx=uPos;
   const feat=geoData.features[fi];
-  if(!answered.has(fi)&&!revealed.has(fi)) setFeatureColor(fi,C.active);
   populatePanel(fi);
   if(!answered.has(fi)&&!revealed.has(fi)&&!gameOver) focusPanelInput();
   rotateTo(feat, null);
   updateNavButtons();updateCounterSide();
-  highlightListItem(feat.properties.ISO_A3);
+  highlightListItem(fi);
 }
 
 function populatePanel(fi){
   const feat=geoData.features[fi],p=feat.properties,isDone=answered.has(fi)||revealed.has(fi);
-  const uPos=unanswered.indexOf(fi);
-  document.getElementById("q-counter-side").textContent=uPos!==-1?`Unanswered ${uPos+1}/${unanswered.length}`:answered.has(fi)?"✓ answered":"revealed";
-  document.getElementById("side-prompt").textContent=mode==="countries"?"Which country is this?":mode==="capitals"?`Capital of ${p.ADMIN}?`:"Name this country and its capital.";
+  document.getElementById("side-prompt").textContent=mode==="countries"?"Which country is this?":mode==="capitals"?`Capital of ${p.name}?`:"Name this country and its capital.";
   const inpC=document.getElementById("panel-input-country"),inpCap=document.getElementById("panel-input-capital");
   const sc=mode==="countries"||mode==="both",scp=mode==="capitals"||mode==="both";
   document.getElementById("panel-country-row").style.display=sc?"block":"none";
@@ -1048,9 +1415,9 @@ function populatePanel(fi){
   document.getElementById("panel-feedback").textContent="";document.getElementById("panel-feedback").className="";
   document.getElementById("btn-skip").disabled=isDone||gameOver;
   if(isDone){
-    if(sc){inpC.value=p.ADMIN;inpC.classList.add("ok");inpC.disabled=true;}
-    if(scp){inpCap.value=p.capital_name||"N/A";inpCap.classList.add("ok");inpCap.disabled=true;}
-    document.getElementById("panel-feedback").textContent=answered.has(fi)?"✓ correct":`revealed: ${p.ADMIN}${p.capital_name?" · "+p.capital_name:""}`;
+    if(sc){inpC.value=p.name;inpC.classList.add("ok");inpC.disabled=true;}
+    if(scp){inpCap.value=p.capital||"N/A";inpCap.classList.add("ok");inpCap.disabled=true;}
+    document.getElementById("panel-feedback").textContent=answered.has(fi)?"✓ correct":`revealed: ${p.name}${p.capital?" · "+p.capital:""}`;
     document.getElementById("panel-feedback").className=answered.has(fi)?"correct":"wrong";
   }
 }
@@ -1063,11 +1430,7 @@ function focusPanelInput(){
 }
 
 function selectAndShowCountry(fi, fast=false){
-  if(activeFeatIdx!==null&&!answered.has(activeFeatIdx)&&!revealed.has(activeFeatIdx)){
-    setFeatureColor(activeFeatIdx,C.land);
-  }
-  activeFeatIdx=fi;
-  if(!answered.has(fi)&&!revealed.has(fi)) setFeatureColor(fi,C.active);
+  setActiveFeature(fi);
   populatePanel(fi);
   if(!answered.has(fi)&&!revealed.has(fi)) focusPanelInput();
   rotateTo(geoData.features[fi], null, fast);
@@ -1084,11 +1447,17 @@ function updateNavButtons(){
   document.getElementById("btn-next-side").disabled=no;
 }
 function updateCounterSide(){
-  document.getElementById("q-counter-side").textContent=unanswered.length>0?`${unanswered.length} unanswered remaining`:"All answered!";
+  const el=document.getElementById("q-counter-side");
+  const left=unanswered.length>0?`${unanswered.length} left`:"all answered";
+  if(activeFeatIdx!==null&&answered.has(activeFeatIdx)) el.textContent=`✓ answered · ${left}`;
+  else if(activeFeatIdx!==null&&revealed.has(activeFeatIdx)) el.textContent=`revealed · ${left}`;
+  else el.textContent=unanswered.length>0?`${unanswered.length} unanswered remaining`:"All answered!";
 }
-function highlightListItem(iso){
+function highlightListItem(fi){
   document.querySelectorAll(".answer-item").forEach(el=>el.classList.remove("active-item"));
-  if(iso){const el=document.querySelector(`.answer-item[data-iso="${iso}"]`);if(el){el.classList.add("active-item");el.scrollIntoView({block:"nearest",behavior:"smooth"});}}
+  if(fi===null||fi===undefined) return;
+  const el=document.querySelector(`.answer-item[data-fi="${fi}"]`);
+  if(el){el.classList.add("active-item");el.scrollIntoView({block:"nearest",behavior:"smooth"});}
 }
 
 let cDone=false,capDone=false;
@@ -1098,19 +1467,21 @@ function checkInputs(){
   if(answered.has(fi)||revealed.has(fi)||gameOver)return;
   const feat=geoData.features[fi],p=feat.properties;
   const inpC=document.getElementById("panel-input-country"),inpCap=document.getElementById("panel-input-capital");
-  const nc=mode==="countries"||mode==="both",ncp=(mode==="capitals"||mode==="both")&&p.capital_name;
+  const nc=mode==="countries"||mode==="both",ncp=(mode==="capitals"||mode==="both")&&p.capital;
 
   const prevCDone=cDone, prevCapDone=capDone;
 
+  // On a correct answer the box is rewritten to the canonical name, so typing
+  // "uk" or "drc" locks to "United Kingdom" / "Democratic Republic of the
+  // Congo" -- you always end up reading the name the quiz is actually teaching.
   if(nc&&!cDone){
-    const alts=[p.ADMIN,p.NAME,p.NAME_LONG,p.FORMAL_EN,p.BRK_NAME].filter(Boolean).map(norm);
-    cDone=alts.includes(norm(inpC.value));
-    if(cDone){inpC.classList.add("ok");inpC.classList.remove("bad");}
+    cDone=matchesCountry(p,inpC.value);
+    if(cDone){inpC.value=p.name;inpC.classList.add("ok");inpC.classList.remove("bad");}
   } else if(!nc) cDone=true;
 
   if(ncp&&!capDone){
-    capDone=norm(inpCap.value)===norm(p.capital_name);
-    if(capDone){inpCap.classList.add("ok");inpCap.classList.remove("bad");}
+    capDone=matchesCapital(p,inpCap.value);
+    if(capDone){inpCap.value=p.capital;inpCap.classList.add("ok");inpCap.classList.remove("bad");}
   } else if(!ncp) capDone=true;
 
   if(mode==="both"){
@@ -1126,21 +1497,26 @@ function markAnswered(fi){
   const pos=unanswered.indexOf(fi);if(pos!==-1){unanswered.splice(pos,1);if(uIdx>=unanswered.length)uIdx=Math.max(0,unanswered.length-1);}
   score++;updateScoreDisplay();updateNavButtons();updateCounterSide();
   const feat=geoData.features[fi];
-  setFeatureColor(fi,C.correct);
+  setFeatureColor(fi,getColor(fi));
   if(featureCapDot[fi]) featureCapDot[fi].visible=true;
   addListItem(feat,true,fi);updateProgress();
   document.getElementById("panel-feedback").textContent="✓ correct!";document.getElementById("panel-feedback").className="correct";
   document.getElementById("panel-input-country").disabled=true;document.getElementById("panel-input-capital").disabled=true;
   document.getElementById("btn-skip").disabled=true;
   checkAllDone();
-  if(!gameOver&&unanswered.length>0){const sf=fi;setTimeout(()=>{if(activeFeatIdx===sf){const nf=unanswered[uIdx];activeFeatIdx=nf;selectAndShowCountry(nf,true);}},400);}
+  if(!gameOver&&unanswered.length>0){const sf=fi;setTimeout(()=>{if(activeFeatIdx===sf){
+    // Do NOT set activeFeatIdx here: selectAndShowCountry needs to see the
+    // old value so it can repaint the country just answered back from the
+    // dark selected shade to the plain green one.
+    selectAndShowCountry(unanswered[uIdx],true);
+  }},400);}
 }
 
 function addListItem(feat,correct,fi){
-  const p=feat.properties,iso=featKey(p);
+  const p=feat.properties;
   const list=document.getElementById("answer-list");
-  const item=document.createElement("div");item.className="answer-item";item.dataset.iso=iso;item.dataset.fi=fi;
-  item.innerHTML=`<span class="dot ${correct?"ok":"no"}"></span><span class="a-name">${p.ADMIN}</span>`+(p.capital_name?`<span class="a-cap">· ${p.capital_name}</span>`:"");
+  const item=document.createElement("div");item.className="answer-item";item.dataset.fi=fi;
+  item.innerHTML=`<span class="dot ${correct?"ok":"no"}"></span><span class="a-name">${p.name}</span>`+(p.capital?`<span class="a-cap">· ${p.capital}</span>`:"");
   item.addEventListener("click",()=>{onClickFeatureIdx(parseInt(item.dataset.fi));});
   list.appendChild(item);list.scrollTop=list.scrollHeight;
 }
@@ -1155,14 +1531,14 @@ document.getElementById("btn-skip").addEventListener("click",()=>{
   revealed.add(fi);
   const pos=unanswered.indexOf(fi);if(pos!==-1){unanswered.splice(pos,1);if(uIdx>=unanswered.length)uIdx=Math.max(0,unanswered.length-1);}
   const feat=geoData.features[fi];
-  setFeatureColor(fi,C.giveup);
+  setFeatureColor(fi,getColor(fi));
   if(featureCapDot[fi]) featureCapDot[fi].visible=true;
   addListItem(feat,false,fi);
   updateProgress();updateScoreDisplay();updateNavButtons();updateCounterSide();
   const p=feat.properties,sc=mode==="countries"||mode==="both",scp=mode==="capitals"||mode==="both";
-  if(sc){document.getElementById("panel-input-country").value=p.ADMIN;document.getElementById("panel-input-country").classList.add("ok");document.getElementById("panel-input-country").disabled=true;}
-  if(scp){document.getElementById("panel-input-capital").value=p.capital_name||"N/A";document.getElementById("panel-input-capital").classList.add("ok");document.getElementById("panel-input-capital").disabled=true;}
-  document.getElementById("panel-feedback").textContent=`revealed: ${p.ADMIN}${p.capital_name?" · "+p.capital_name:""}`;
+  if(sc){document.getElementById("panel-input-country").value=p.name;document.getElementById("panel-input-country").classList.add("ok");document.getElementById("panel-input-country").disabled=true;}
+  if(scp){document.getElementById("panel-input-capital").value=p.capital||"N/A";document.getElementById("panel-input-capital").classList.add("ok");document.getElementById("panel-input-capital").disabled=true;}
+  document.getElementById("panel-feedback").textContent=`revealed: ${p.name}${p.capital?" · "+p.capital:""}`;
   document.getElementById("panel-feedback").className="wrong";document.getElementById("btn-skip").disabled=true;
   checkAllDone();
 });
@@ -1171,7 +1547,7 @@ document.getElementById("btn-giveup").addEventListener("click",()=>{
   if(gameOver)return;if(!confirm("Reveal all remaining unanswered countries?"))return;
   [...unanswered].forEach(fi=>{
     revealed.add(fi);const feat=geoData.features[fi];
-    setFeatureColor(fi,C.giveup);
+    setFeatureColor(fi,getColor(fi));
     if(featureCapDot[fi]) featureCapDot[fi].visible=true;
     addListItem(feat,false,fi);
   });
@@ -1183,7 +1559,32 @@ document.getElementById("btn-giveup").addEventListener("click",()=>{
 document.getElementById("btn-next-side").addEventListener("click",goNext);
 document.getElementById("btn-prev-side").addEventListener("click",goPrev);
 
+// Move focus between the country and capital boxes. Skips a box that is already
+// solved and disabled, so Ctrl+Down still lands somewhere useful.
+function focusAdjacentField(dir){
+  const ids=[["panel-country-row","panel-input-country"],["panel-capital-row","panel-input-capital"]]
+    .filter(([row])=>document.getElementById(row).style.display!=="none")
+    .map(([,input])=>input);
+  if(!ids.length) return;
+  const cur=ids.indexOf(document.activeElement&&document.activeElement.id);
+  let i=cur===-1?(dir>0?0:ids.length-1):(cur+dir+ids.length)%ids.length;
+  for(let n=0;n<ids.length;n++){
+    const el=document.getElementById(ids[i]);
+    if(el&&!el.disabled){el.focus();el.select();return;}
+    i=(i+dir+ids.length)%ids.length;
+  }
+}
+
 document.addEventListener("keydown",e=>{
+  // Ctrl+arrows are deliberately global: they fire while an answer box has focus,
+  // so you can move on without reaching for the mouse mid-answer.
+  if(e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.shiftKey){
+    if(e.key==="ArrowRight"){e.preventDefault();goNext();return;}
+    if(e.key==="ArrowLeft"){e.preventDefault();goPrev();return;}
+    if(e.key==="ArrowDown"){e.preventDefault();focusAdjacentField(1);return;}
+    if(e.key==="ArrowUp"){e.preventDefault();focusAdjacentField(-1);return;}
+  }
+  // Bare arrows only when not typing, so they still move the text cursor.
   if(document.activeElement&&document.activeElement.tagName==="INPUT") return;
   if(e.key==="ArrowRight") goNext();
   else if(e.key==="ArrowLeft") goPrev();
@@ -1196,9 +1597,8 @@ document.addEventListener("keydown",e=>{
     if(e.key!=="Enter")return;
     if(activeFeatIdx!==null&&(answered.has(activeFeatIdx)||revealed.has(activeFeatIdx))){goNext();return;}
     if(!el.classList.contains("ok")&&el.value.length>0){
-      const p=geoData.features[activeFeatIdx].properties;let ok=false;
-      if(id==="panel-input-country")ok=[p.ADMIN,p.NAME,p.NAME_LONG,p.FORMAL_EN,p.BRK_NAME].filter(Boolean).map(norm).includes(norm(el.value));
-      else ok=norm(el.value)===norm(p.capital_name);
+      const p=geoData.features[activeFeatIdx].properties;
+      const ok=id==="panel-input-country"?matchesCountry(p,el.value):matchesCapital(p,el.value);
       if(!ok){el.classList.add("bad");setTimeout(()=>el.classList.remove("bad"),400);}
     }
     checkInputs();

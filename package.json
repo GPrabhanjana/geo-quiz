@@ -1,0 +1,24 @@
+{
+  "name": "geo-quiz",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GPrabhanjana/geo-quiz.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GPrabhanjana/geo-quiz/issues"
+  },
+  "homepage": "https://github.com/GPrabhanjana/geo-quiz#readme",
+  "devDependencies": {
+    "mapshaper": "^0.7.49"
+  }
+}
