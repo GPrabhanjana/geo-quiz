@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>GeoQuiz</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -76,7 +76,7 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 .panel-input:focus{border-color:var(--accent)}
 .panel-input.ok{border-color:var(--correct);background:#f0fdf4}
 .panel-input.bad{border-color:var(--wrong);animation:shake .3s}
-.panel-input:disabled{opacity:.65}
+.panel-input:disabled,.panel-input.locked{opacity:.65;cursor:default}
 #panel-feedback{font-size:.72rem;min-height:16px}
 #panel-feedback.correct{color:var(--correct)}
 #panel-feedback.wrong{color:var(--wrong)}
@@ -98,8 +98,9 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 /* Progress */
 #progress-area{padding:10px 16px;border-bottom:1px solid var(--border)}
 #progress-label{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;display:flex;justify-content:space-between}
-#progress-bar-bg{height:5px;background:#e8e2d5;overflow:hidden}
+#progress-bar-bg{height:5px;background:#e8e2d5;overflow:hidden;display:flex}
 #progress-bar-fill{height:100%;background:var(--col-correct);transition:width .4s ease;width:0%}
+#progress-bar-miss{height:100%;background:var(--col-giveup);transition:width .4s ease;width:0%}
 
 /* Danger zone */
 #side-danger{padding:10px 16px;border-top:1px solid var(--border);margin-top:auto;display:flex;flex-direction:column;gap:6px}
@@ -160,36 +161,69 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
   /* Main — vertical stack */
   #main{flex-direction:column}
 
-  /* Globe — top half */
-  #map-wrap{flex:0 0 45vh;min-height:0}
+  /* ── ONE STATIC LAYOUT ──
+     Nothing here reacts to the keyboard, because nothing needs to. The panel is
+     built so prev/next ends exactly on the line where the keyboard will appear,
+     and everything below that line -- the answered list and the reveal/give-up
+     buttons -- is precisely what the keyboard covers. Opening or closing it
+     reveals or hides those without a single pixel moving.
+     The globe takes whatever the panel leaves. */
+  #map-wrap{flex:1 1 auto;min-height:60px}
 
   /* Map controls — smaller, tucked */
   #map-controls{bottom:8px;right:8px;gap:3px}
   .map-btn{width:26px;height:26px;font-size:.85rem}
   #map-legend{bottom:8px;left:8px;padding:5px 7px;font-size:.56rem}
 
-  /* Sidebar — bottom half, scrollable */
-  #sidebar{width:100%;flex:1;border-left:none;border-top:1px solid var(--border);flex-direction:column;min-height:0;overflow-y:auto}
+  #sidebar{width:100%;flex:0 0 auto;min-height:0;
+    border-left:none;border-top:1px solid var(--border);flex-direction:column;
+    overflow:hidden}
 
-  /* Collapse answer list on mobile to save space */
-  #answer-list{flex:0 0 auto;max-height:120px;overflow-y:auto}
+  /* The answered list spans the gap between the keyboard line and the buttons
+     pinned at the bottom, and scrolls within it. --kb-h is this device's
+     measured keyboard height (see learnKeyboardHeight), --danger-h the buttons
+     below it. So the list plus those buttons are exactly what the keyboard hides. */
+  #answer-list{flex:0 0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    height:max(0px, calc(var(--kb-h,300px) - var(--danger-h,48px)))}
 
   /* Side danger buttons — row on mobile */
-  #side-danger{flex-direction:row;gap:8px;padding:8px 12px}
+  /* Reveal / give up sit permanently at the very bottom of the screen. */
+  #side-danger{flex-direction:row;gap:8px;padding:8px 12px;margin-top:0;flex:0 0 auto}
   #btn-skip,#btn-giveup{flex:1}
 
   /* No ctrl key on touch devices */
   #kbd-hints{display:none}
 
-  /* Inputs bigger for touch */
-  .panel-input{font-size:.9rem;padding:8px 10px}
-  #side-question{padding:10px 12px 4px}
-  #side-nav{padding:3px 12px 8px}
-  #progress-area{padding:8px 12px}
+  /* Progress: a hairline pinned under the header rather than a labelled block
+     down in the panel. Fixed, so it costs the layout nothing at all. */
+  #progress-area{position:fixed;top:var(--header-h,37px);left:0;right:0;z-index:9;
+    padding:0;border:none;background:transparent}
+  #progress-label{display:none}
+  #progress-bar-bg{height:3px;background:rgba(0,0,0,.10)}
+
+  /* 16px stays (below it iOS zooms the page on focus); the height comes off the
+     padding instead. */
+  .panel-input{font-size:16px;padding:4px 10px;margin-bottom:0}
+
+  /* The feedback line reserves 16px even when empty, which was most of the gap
+     above the buttons. Let it collapse and only take space when it says something. */
+  #panel-feedback{min-height:0}
+
+  /* The boxes already say "type country..." / "type capital...", and the counter
+     and prompt repeat what the globe and the mode badge already tell you. */
+  .panel-input-label{display:none}
+  #q-counter-side{display:none}
+  body:not([data-mode="capitals"]) #side-prompt{display:none}
+
+  /* Almost nothing between the last box and the buttons. */
+  #side-question{padding:8px 12px 1px;gap:4px}
+  #side-nav{padding:1px 12px 8px}
 
   /* Giveup banner */
   #giveup-banner{flex-wrap:wrap;gap:6px;padding:8px 12px;font-size:.72rem}
   #btn-play-again{margin-left:0}
+
+
 }
 </style>
 </head>
@@ -271,7 +305,7 @@ header h1{font-family:'DM Serif Display',serif;font-size:1.25rem;letter-spacing:
 
     <div id="progress-area">
       <div id="progress-label"><span>Progress</span><span id="progress-text">0 / 0</span></div>
-      <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+      <div id="progress-bar-bg"><div id="progress-bar-fill"></div><div id="progress-bar-miss"></div></div>
     </div>
 
     <div id="answer-list"><h3>Answered</h3></div>
@@ -1313,6 +1347,9 @@ function startGame(m){
   }
 
   mode=m;
+  // Mobile hides the prompt, except in capitals mode where it is the only place
+  // the country name appears.
+  document.body.dataset.mode=m;
   selectedContinent = document.getElementById("continent-select")?.value || "World";
   const continentFeatures = geoData.features
     .map((_,i)=>i)
@@ -1357,7 +1394,7 @@ function startGame(m){
       buildSmallCountryHalos();
     }
 
-    updateScoreDisplay();updateNavButtons();updateCounterSide();
+    updateScoreDisplay();updateNavButtons();updateCounterSide();updateProgress();
 
     if(unanswered.length>0){
       const fi=unanswered[0];
@@ -1410,23 +1447,34 @@ function populatePanel(fi){
   document.getElementById("panel-capital-row").style.display=scp?"block":"none";
   inpC.value="";inpCap.value="";
   inpC.classList.remove("ok","bad");inpCap.classList.remove("ok","bad");
-  inpC.disabled=false;inpCap.disabled=false;
+  unlockInput(inpC);unlockInput(inpCap);
   cDone=false;capDone=false;
   document.getElementById("panel-feedback").textContent="";document.getElementById("panel-feedback").className="";
   document.getElementById("btn-skip").disabled=isDone||gameOver;
   if(isDone){
-    if(sc){inpC.value=p.name;inpC.classList.add("ok");inpC.disabled=true;}
-    if(scp){inpCap.value=p.capital||"N/A";inpCap.classList.add("ok");inpCap.disabled=true;}
+    if(sc){inpC.value=p.name;inpC.classList.add("ok");lockInput(inpC);}
+    if(scp){inpCap.value=p.capital||"N/A";inpCap.classList.add("ok");lockInput(inpCap);}
     document.getElementById("panel-feedback").textContent=answered.has(fi)?"✓ correct":`revealed: ${p.name}${p.capital?" · "+p.capital:""}`;
     document.getElementById("panel-feedback").className=answered.has(fi)?"correct":"wrong";
   }
 }
 
+// Locking a solved box changes NEITHER disabled NOR readOnly, because both tear
+// the on-screen keyboard down: disabled blurs the field outright, and iOS
+// refuses to show a keyboard for a readonly field, dismissing it the moment the
+// attribute is set. Either way the auto-advance then refocuses the next box and
+// the keyboard springs back -- the open/close flicker on every answer.
+// Instead the field stays an ordinary focused text box and keystrokes are
+// dropped in beforeinput, so the OS never has a reason to hide the keyboard.
+function lockInput(el){ el.dataset.locked="1"; el.classList.add("locked"); }
+function unlockInput(el){ delete el.dataset.locked; el.classList.remove("locked"); }
+function inputLocked(el){ return !el || el.disabled || el.dataset.locked==="1"; }
+
 function focusPanelInput(){
   if(gameOver) return;
   const sc=mode==="countries"||mode==="both";
   const el=document.getElementById(sc?"panel-input-country":"panel-input-capital");
-  if(el&&!el.disabled) el.focus();
+  if(el&&!inputLocked(el)) el.focus();
 }
 
 function selectAndShowCountry(fi, fast=false){
@@ -1485,8 +1533,8 @@ function checkInputs(){
   } else if(!ncp) capDone=true;
 
   if(mode==="both"){
-    if(cDone&&!prevCDone){inpC.disabled=true;if(!capDone) inpCap.focus();}
-    if(capDone&&!prevCapDone){inpCap.disabled=true;if(!cDone) inpC.focus();}
+    if(cDone&&!prevCDone){lockInput(inpC);if(!capDone) inpCap.focus();}
+    if(capDone&&!prevCapDone){lockInput(inpCap);if(!cDone) inpC.focus();}
   }
 
   if(cDone&&capDone) markAnswered(fi);
@@ -1501,7 +1549,7 @@ function markAnswered(fi){
   if(featureCapDot[fi]) featureCapDot[fi].visible=true;
   addListItem(feat,true,fi);updateProgress();
   document.getElementById("panel-feedback").textContent="✓ correct!";document.getElementById("panel-feedback").className="correct";
-  document.getElementById("panel-input-country").disabled=true;document.getElementById("panel-input-capital").disabled=true;
+  lockInput(document.getElementById("panel-input-country"));lockInput(document.getElementById("panel-input-capital"));
   document.getElementById("btn-skip").disabled=true;
   checkAllDone();
   if(!gameOver&&unanswered.length>0){const sf=fi;setTimeout(()=>{if(activeFeatIdx===sf){
@@ -1521,7 +1569,12 @@ function addListItem(feat,correct,fi){
   list.appendChild(item);list.scrollTop=list.scrollHeight;
 }
 
-function updateProgress(){const d=answered.size+revealed.size,t=questions.length;document.getElementById("progress-bar-fill").style.width=Math.round(d/t*100)+"%";document.getElementById("progress-text").textContent=`${d} / ${t}`;}
+function updateProgress(){
+  const t=questions.length||1;
+  document.getElementById("progress-bar-fill").style.width=(answered.size/t*100)+"%";
+  document.getElementById("progress-bar-miss").style.width=(revealed.size/t*100)+"%";
+  document.getElementById("progress-text").textContent=`${answered.size+revealed.size} / ${questions.length}`;
+}
 function updateScoreDisplay(){document.getElementById("score-num").textContent=score;document.getElementById("score-total").textContent=answered.size+revealed.size;}
 function checkAllDone(){if(answered.size+revealed.size===questions.length){gameOver=true;document.getElementById("giveup-banner").classList.add("show");document.getElementById("btn-giveup").disabled=true;}}
 
@@ -1536,8 +1589,8 @@ document.getElementById("btn-skip").addEventListener("click",()=>{
   addListItem(feat,false,fi);
   updateProgress();updateScoreDisplay();updateNavButtons();updateCounterSide();
   const p=feat.properties,sc=mode==="countries"||mode==="both",scp=mode==="capitals"||mode==="both";
-  if(sc){document.getElementById("panel-input-country").value=p.name;document.getElementById("panel-input-country").classList.add("ok");document.getElementById("panel-input-country").disabled=true;}
-  if(scp){document.getElementById("panel-input-capital").value=p.capital||"N/A";document.getElementById("panel-input-capital").classList.add("ok");document.getElementById("panel-input-capital").disabled=true;}
+  if(sc){document.getElementById("panel-input-country").value=p.name;document.getElementById("panel-input-country").classList.add("ok");lockInput(document.getElementById("panel-input-country"));}
+  if(scp){document.getElementById("panel-input-capital").value=p.capital||"N/A";document.getElementById("panel-input-capital").classList.add("ok");lockInput(document.getElementById("panel-input-capital"));}
   document.getElementById("panel-feedback").textContent=`revealed: ${p.name}${p.capital?" · "+p.capital:""}`;
   document.getElementById("panel-feedback").className="wrong";document.getElementById("btn-skip").disabled=true;
   checkAllDone();
@@ -1570,7 +1623,7 @@ function focusAdjacentField(dir){
   let i=cur===-1?(dir>0?0:ids.length-1):(cur+dir+ids.length)%ids.length;
   for(let n=0;n<ids.length;n++){
     const el=document.getElementById(ids[i]);
-    if(el&&!el.disabled){el.focus();el.select();return;}
+    if(el&&!inputLocked(el)){el.focus();el.select();return;}
     i=(i+dir+ids.length)%ids.length;
   }
 }
@@ -1592,6 +1645,16 @@ document.addEventListener("keydown",e=>{
 
 ["panel-input-country","panel-input-capital"].forEach(id=>{
   const el=document.getElementById(id);
+  // Swallow edits to a solved box without touching focus or the keyboard.
+  // Covers typing, paste and autocorrect alike.
+  el.addEventListener("beforeinput",e=>{ if(el.dataset.locked==="1") e.preventDefault(); });
+  // Without disabled there is nothing stopping a tap focusing a solved box and
+  // raising a keyboard you cannot type into. Refuse the focus instead -- but not
+  // if the box is already focused, which is exactly the case right after you
+  // answer and is the focus we are trying to preserve.
+  el.addEventListener("pointerdown",e=>{
+    if(el.dataset.locked==="1"&&document.activeElement!==el) e.preventDefault();
+  });
   el.addEventListener("input",()=>checkInputs());
   el.addEventListener("keydown",e=>{
     if(e.key!=="Enter")return;
@@ -1604,6 +1667,75 @@ document.addEventListener("keydown",e=>{
     checkInputs();
   });
 });
+
+// ─────────────────────────────────────────────
+//  MOBILE VIEWPORT / ON-SCREEN KEYBOARD
+//  The layout never reacts to the keyboard. Instead the keyboard's height is
+//  measured the first time it opens and remembered, and the panel is built so
+//  that the answered list and the reveal/give-up buttons occupy exactly the
+//  band the keyboard will cover. Nothing moves when it opens or closes.
+//
+//  This replaces detecting open/closed and reflowing, which was fragile for a
+//  reason worth recording: with interactive-widget=resizes-content the browser
+//  shrinks the layout viewport too, so window.innerHeight fell in step with
+//  visualViewport.height, their difference stayed ~0, and the keyboard was
+//  never detected at all. The viewport meta is now resizes-visual so the
+//  keyboard overlays the page and the layout viewport holds still.
+// ─────────────────────────────────────────────
+const KEYBOARD_MIN_PX = 120;   // smaller than this is browser chrome, not a keyboard
+const KB_STORE = "geoquiz-keyboard-height";
+let maxViewportH = 0;          // tallest visual viewport seen, i.e. keyboard closed
+
+function setKeyboardHeight(px){
+  px=Math.round(px);
+  document.documentElement.style.setProperty("--kb-h",px+"px");
+  try{ localStorage.setItem(KB_STORE,String(px)); }catch(e){}
+}
+
+// Until the keyboard has actually been seen, fall back to a stored measurement
+// from a previous visit, or a rough guess. A wrong guess only means the band is
+// slightly off on the very first focus; it corrects itself the moment the
+// keyboard appears and is right on every later load.
+(function seedKeyboardHeight(){
+  let stored=0;
+  try{ stored=parseInt(localStorage.getItem(KB_STORE)||"0",10); }catch(e){}
+  setKeyboardHeight(stored>KEYBOARD_MIN_PX ? stored : Math.round(window.innerHeight*0.42));
+})();
+
+// Where the fixed progress hairline sits, and how tall the bottom buttons are.
+function measureChrome(){
+  const root=document.documentElement.style;
+  const header=document.querySelector("header");
+  if(header) root.setProperty("--header-h",header.offsetHeight+"px");
+  const danger=document.getElementById("side-danger");
+  if(danger&&danger.offsetHeight) root.setProperty("--danger-h",danger.offsetHeight+"px");
+}
+
+function syncViewport(){
+  const vv=window.visualViewport;
+  const h=vv?vv.height:window.innerHeight;
+
+  // Measured against the tallest viewport seen rather than window.innerHeight,
+  // so this holds whether or not the browser resizes the layout viewport.
+  maxViewportH=Math.max(maxViewportH,h);
+  const covered=maxViewportH-h;
+  if(covered>KEYBOARD_MIN_PX){
+    const current=parseInt(getComputedStyle(document.documentElement)
+      .getPropertyValue("--kb-h"),10)||0;
+    if(Math.abs(covered-current)>8) setKeyboardHeight(covered);
+  }
+  measureChrome();
+}
+
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize",syncViewport);
+  window.visualViewport.addEventListener("scroll",syncViewport);
+}
+window.addEventListener("resize",()=>{ maxViewportH=0; syncViewport(); if(renderer) setTimeout(onResize,60); });
+window.addEventListener("orientationchange",()=>setTimeout(()=>{
+  maxViewportH=0; syncViewport(); if(renderer) onResize();
+},250));
+syncViewport();
 
 // ─────────────────────────────────────────────
 //  INIT
