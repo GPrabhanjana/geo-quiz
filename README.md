@@ -3,7 +3,7 @@
 A geography quiz on an interactive 3D globe. Name all 197 countries, their
 capitals, or both.
 
-Built by [Prabhanjana](https://gprabhanjana.netlify.app/).
+Built by [Prabhanjana](https://gprabhanjana.netlify.app/). [Live here](https://geoquiz-by-prabhanjana.netlify.app/).
 
 ## Play
 
